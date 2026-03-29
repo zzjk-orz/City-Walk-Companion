@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>漫游 · CityWalk</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@300;400;600&family=Noto+Sans+SC:wght@300;400&family=Playfair+Display:ital@0;1&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #1a1208;
+    --paper: #f5f0e8;
+    --aged: #e8dfc8;
+    --accent: #8b4513;
+    --gold: #c9a84c;
+    --muted: #7a6a55;
+    --card-bg: #faf7f2;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'Noto Sans SC', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Texture overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 1000;
+    opacity: 0.5;
+  }
+
+  header {
+    padding: 28px 24px 20px;
+    border-bottom: 1px solid var(--gold);
+    position: relative;
+  }
+
+  .header-top {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+  }
+
+  .app-title {
+    font-family: 'Playfair Display', serif;
+    font-style: italic;
+    font-size: 28px;
+    color: var(--accent);
+    letter-spacing: 1px;
+  }
+
+  .app-title-zh {
+    font-family: 'Noto Serif SC', serif;
+    font-weight: 300;
+    font-size: 16px;
+    color: var(--muted);
+    letter-spacing: 4px;
+  }
+
+  .location-status {
+    margin-top: 8px;
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 1px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--muted);
+    flex-shrink: 0;
+  }
+
+  .status-dot.active { background: #5a8a5a; animation: pulse 2s infinite; }
+  .status-dot.error { background: #c0392b; }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  .scan-btn {
+    width: calc(100% - 48px);
+    margin: 20px 24px;
+    padding: 14px;
+    background: var(--accent);
+    color: var(--paper);
+    border: none;
+    font-family: 'Noto Serif SC', serif;
+    font-size: 15px;
+    letter-spacing: 4px;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+    transition: opacity 0.2s;
+  }
+
+  .scan-btn::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
+    transform: translateX(-100%);
+    transition: transform 0.5s;
+  }
+
+  .scan-btn:hover::after { transform: translateX(100%); }
+  .scan-btn:disabled { opacity: 0.5; cursor: default; }
+
+  .places-list {
+    padding: 0 24px 100px;
+  }
+
+  .section-label {
+    font-size: 10px;
+    letter-spacing: 3px;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .section-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--aged);
+  }
+
+  .place-card {
+    background: var(--card-bg);
+    border: 1px solid var(--aged);
+    margin-bottom: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .place-card::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+    background: var(--gold);
+    transform: scaleY(0);
+    transition: transform 0.2s;
+    transform-origin: bottom;
+  }
+
+  .place-card:hover::before,
+  .place-card.active::before { transform: scaleY(1); }
+
+  .place-card-header {
+    padding: 16px 18px 12px;
+  }
+
+  .place-name {
+    font-family: 'Noto Serif SC', serif;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--ink);
+    line-height: 1.4;
+    margin-bottom: 4px;
+  }
+
+  .place-meta {
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.5px;
+    display: flex;
+    gap: 12px;
+  }
+
+  .place-type {
+    background: var(--aged);
+    padding: 2px 8px;
+    font-size: 10px;
+    letter-spacing: 1px;
+  }
+
+  .story-area {
+    padding: 0 18px 16px;
+    border-top: 1px dashed var(--aged);
+    margin-top: 4px;
+  }
+
+  .story-loading {
+    padding-top: 14px;
+    font-size: 12px;
+    color: var(--muted);
+    letter-spacing: 2px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .loading-dots span {
+    display: inline-block;
+    width: 4px; height: 4px;
+    border-radius: 50%;
+    background: var(--gold);
+    animation: dot-bounce 1.2s infinite;
+  }
+
+  .loading-dots span:nth-child(2) { animation-delay: 0.2s; }
+  .loading-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+  @keyframes dot-bounce {
+    0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
+    40% { transform: translateY(-5px); opacity: 1; }
+  }
+
+  .story-text {
+    padding-top: 14px;
+    font-size: 13.5px;
+    line-height: 2;
+    color: #2a1f10;
+    font-family: 'Noto Serif SC', serif;
+    font-weight: 300;
+  }
+
+  .story-text p { margin-bottom: 10px; }
+  .story-text p:last-child { margin-bottom: 0; }
+
+  .tts-btn {
+    margin-top: 12px;
+    padding: 6px 14px;
+    border: 1px solid var(--gold);
+    background: transparent;
+    color: var(--accent);
+    font-family: 'Noto Sans SC', sans-serif;
+    font-size: 11px;
+    letter-spacing: 2px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .tts-btn:hover { background: var(--gold); color: var(--paper); }
+  .tts-btn.speaking { background: var(--accent); color: var(--paper); }
+
+  .empty-state {
+    text-align: center;
+    padding: 60px 24px;
+    color: var(--muted);
+  }
+
+  .empty-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+    opacity: 0.4;
+  }
+
+  .empty-text {
+    font-family: 'Noto Serif SC', serif;
+    font-size: 14px;
+    letter-spacing: 2px;
+    line-height: 2;
+  }
+
+  .error-banner {
+    margin: 0 24px 16px;
+    padding: 12px 16px;
+    background: #fdf0ee;
+    border: 1px solid #e8c8c4;
+    font-size: 12px;
+    color: #8b3a2a;
+    line-height: 1.6;
+  }
+
+  /* Decorative corner */
+  header::after {
+    content: '漫';
+    position: absolute;
+    right: 24px;
+    top: 24px;
+    font-family: 'Noto Serif SC', serif;
+    font-size: 48px;
+    color: var(--aged);
+    line-height: 1;
+    pointer-events: none;
+  }
+
+  .divider {
+    text-align: center;
+    color: var(--gold);
+    font-size: 14px;
+    letter-spacing: 8px;
+    margin: 8px 0 20px;
+    opacity: 0.6;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-top">
+    <span class="app-title">Wanderer</span>
+    <span class="app-title-zh">漫游</span>
+  </div>
+  <div class="location-status">
+    <div class="status-dot" id="statusDot"></div>
+    <span id="statusText">等待定位</span>
+  </div>
+</header>
+
+<button class="scan-btn" id="scanBtn" onclick="startScan()">探索附近</button>
+
+<div class="places-list" id="placesList">
+  <div class="empty-state">
+    <div class="empty-icon">🧭</div>
+    <div class="empty-text">点击上方按钮<br>发现附近的历史与故事</div>
+  </div>
+</div>
+
+<script>
+const GOOGLE_KEY = 'AIzaSyBUIAznOdtvVJ4VV1Cbjyiy-fkDZyykrDw';
+const CLAUDE_API = 'https://api.anthropic.com/v1/messages';
+
+let currentSpeech = null;
+let userCoords = null;
+
+async function getLocation() {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) return reject(new Error('浏览器不支持定位'));
+    navigator.geolocation.getCurrentPosition(resolve, reject, {
+      enableHighAccuracy: true, timeout: 10000
+    });
+  });
+}
+
+async function fetchNearbyPlaces(lat, lng) {
+  const url = `https://places.googleapis.com/v1/places:searchNearby`;
+  const body = {
+    includedTypes: [
+      "historical_landmark", "museum", "church", "hindu_temple",
+      "mosque", "synagogue", "art_gallery", "library",
+      "performing_arts_theater", "university", "tourist_attraction"
+    ],
+    maxResultCount: 8,
+    locationRestriction: {
+      circle: { center: { latitude: lat, longitude: lng }, radius: 800 }
+    }
+  };
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Goog-Api-Key': GOOGLE_KEY,
+      'X-Goog-FieldMask': 'places.displayName,places.types,places.formattedAddress,places.rating,places.editorialSummary'
+    },
+    body: JSON.stringify(body)
+  });
+
+  if (!res.ok) throw new Error(`Google API错误: ${res.status}`);
+  const data = await res.json();
+  return data.places || [];
+}
+
+async function generateStory(place) {
+  const name = place.displayName?.text || '未知地点';
+  const address = place.formattedAddress || '';
+  const types = (place.types || []).join(', ');
+  const summary = place.editorialSummary?.text || '';
+
+  const prompt = `你是一位博学的城市漫游向导，擅长讲述地方历史与文化故事。
+
+地点信息：
+- 名称：${name}
+- 地址：${address}
+- 类型：${types}
+${summary ? `- 简介：${summary}` : ''}
+
+请用优美流畅的中文，为这个地方写一段200字左右的文化历史介绍。
+要求：
+- 讲述这个地方的历史背景、建筑特色或文化意义
+- 语气像一位见多识广的朋友娓娓道来，不要太学术
+- 如果不了解这个具体地点，可以结合地址中的城市/地区讲述当地的历史文化背景
+- 适当加入有趣的细节或轶事
+- 直接输出介绍文字，不需要任何标题或前缀`;
+
+  const res = await fetch(CLAUDE_API, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 1000,
+      messages: [{ role: 'user', content: prompt }]
+    })
+  });
+
+  if (!res.ok) throw new Error(`Claude API错误: ${res.status}`);
+  const data = await res.json();
+  return data.content?.[0]?.text || '暂无介绍';
+}
+
+function typeLabel(types) {
+  const map = {
+    historical_landmark: '历史地标',
+    museum: '博物馆',
+    church: '教堂',
+    hindu_temple: '寺庙',
+    mosque: '清真寺',
+    synagogue: '犹太教堂',
+    art_gallery: '艺术画廊',
+    library: '图书馆',
+    performing_arts_theater: '剧院',
+    university: '大学',
+    tourist_attraction: '景点'
+  };
+  for (const t of (types || [])) {
+    if (map[t]) return map[t];
+  }
+  return '地点';
+}
+
+function speak(text, btn) {
+  if (currentSpeech) {
+    window.speechSynthesis.cancel();
+    currentSpeech = null;
+    document.querySelectorAll('.tts-btn').forEach(b => {
+      b.classList.remove('speaking');
+      b.textContent = '🔊 朗读';
+    });
+    if (btn.dataset.speaking === 'true') {
+      btn.dataset.speaking = 'false';
+      return;
+    }
+  }
+
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = 'zh-CN';
+  utterance.rate = 0.9;
+
+  // Try to pick a Chinese voice
+  const voices = window.speechSynthesis.getVoices();
+  const zhVoice = voices.find(v => v.lang.startsWith('zh'));
+  if (zhVoice) utterance.voice = zhVoice;
+
+  utterance.onend = () => {
+    btn.classList.remove('speaking');
+    btn.textContent = '🔊 朗读';
+    btn.dataset.speaking = 'false';
+    currentSpeech = null;
+  };
+
+  currentSpeech = utterance;
+  btn.classList.add('speaking');
+  btn.textContent = '⏹ 停止';
+  btn.dataset.speaking = 'true';
+  window.speechSynthesis.speak(utterance);
+}
+
+async function loadStory(place, card, idx) {
+  const existing = card.querySelector('.story-area');
+  if (existing) {
+    existing.remove();
+    card.classList.remove('active');
+    return;
+  }
+
+  card.classList.add('active');
+  const storyArea = document.createElement('div');
+  storyArea.className = 'story-area';
+  storyArea.innerHTML = `
+    <div class="story-loading">
+      <span>正在召唤故事</span>
+      <div class="loading-dots">
+        <span></span><span></span><span></span>
+      </div>
+    </div>`;
+  card.appendChild(storyArea);
+
+  try {
+    const story = await generateStory(place);
+    const paragraphs = story.split('\n').filter(p => p.trim()).map(p => `<p>${p}</p>`).join('');
+    storyArea.innerHTML = `
+      <div class="story-text">${paragraphs}</div>
+      <button class="tts-btn" onclick="speak(this.dataset.text, this)" data-text="${story.replace(/"/g, '&quot;')}" data-speaking="false">
+        🔊 朗读
+      </button>`;
+  } catch (err) {
+    storyArea.innerHTML = `<div class="story-text" style="color:var(--muted)">故事加载失败：${err.message}</div>`;
+  }
+}
+
+function renderPlaces(places) {
+  const list = document.getElementById('placesList');
+
+  if (!places.length) {
+    list.innerHTML = `<div class="error-banner">附近800米内未找到历史文化地点，试试扩大范围或换个位置</div>`;
+    return;
+  }
+
+  list.innerHTML = `<div class="section-label">附近发现 ${places.length} 处</div>`;
+
+  places.forEach((place, idx) => {
+    const name = place.displayName?.text || '未知地点';
+    const address = place.formattedAddress || '';
+    const type = typeLabel(place.types);
+    const rating = place.rating ? `${place.rating} ★` : '';
+
+    const card = document.createElement('div');
+    card.className = 'place-card';
+    card.innerHTML = `
+      <div class="place-card-header">
+        <div class="place-name">${name}</div>
+        <div class="place-meta">
+          <span class="place-type">${type}</span>
+          ${rating ? `<span>${rating}</span>` : ''}
+          <span>${address.split(',').slice(-2).join(',').trim()}</span>
+        </div>
+      </div>`;
+
+    card.querySelector('.place-card-header').addEventListener('click', () => {
+      loadStory(place, card, idx);
+    });
+
+    list.appendChild(card);
+  });
+
+  list.insertAdjacentHTML('beforeend', '<div class="divider">· · ·</div>');
+}
+
+async function startScan() {
+  const btn = document.getElementById('scanBtn');
+  const dot = document.getElementById('statusDot');
+  const statusText = document.getElementById('statusText');
+  const list = document.getElementById('placesList');
+
+  btn.disabled = true;
+  btn.textContent = '定位中…';
+  dot.className = 'status-dot';
+  statusText.textContent = '获取位置中';
+  list.innerHTML = '';
+
+  try {
+    const pos = await getLocation();
+    const { latitude: lat, longitude: lng } = pos.coords;
+    userCoords = { lat, lng };
+
+    dot.className = 'status-dot active';
+    statusText.textContent = `${lat.toFixed(4)}°N  ${lng.toFixed(4)}°W`;
+    btn.textContent = '搜索中…';
+
+    const places = await fetchNearbyPlaces(lat, lng);
+    renderPlaces(places);
+
+    btn.textContent = '重新探索';
+  } catch (err) {
+    dot.className = 'status-dot error';
+    const msg = err.code === 1 ? '位置权限被拒绝，请在浏览器设置中允许定位' :
+                err.message.includes('Google') ? `地点搜索失败：${err.message}` :
+                `错误：${err.message}`;
+    statusText.textContent = '定位失败';
+    list.innerHTML = `<div class="error-banner">${msg}</div>`;
+    btn.textContent = '重试';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// Preload voices for TTS
+window.speechSynthesis.getVoices();
+window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
+</script>
+</body>
+</html>
