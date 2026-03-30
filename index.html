@@ -429,12 +429,7 @@ async function geocodePlace(query) {
 async function generateStory(place) {
   const data = await apiPost({
     action: 'story',
-    place: {
-      name: place.displayName?.text || place.name || '未知地点',
-      address: place.formattedAddress || place.address || '',
-      types: (place.types || []).join(', '),
-      summary: place.editorialSummary?.text || place.summary || ''
-    }
+    place: place // 直接传递已经清洗好的对象
   });
   return data;
 }
@@ -528,11 +523,12 @@ function typeLabel(types) {
   return '地点';
 }
 
+// 找到 index.html 中的 renderPlaces 函数，修改如下部分：
 function renderPlaces(places, sourceLabel) {
   const list = document.getElementById('placesList');
 
   if (!places.length) {
-    list.innerHTML = `<div class="error-banner">该区域800米内未找到历史文化地点，试试重新搜索或换个地点</div>`;
+    list.innerHTML = `<div class="error-banner">该区域800米内未找到历史文化地点...</div>`;
     return;
   }
 
@@ -542,8 +538,14 @@ function renderPlaces(places, sourceLabel) {
   `;
 
   places.forEach(place => {
-    const name = place.displayName?.text || place.name || '未知地点';
-    const address = place.formattedAddress || '';
+    // --- 新增：在这里统一清洗数据结构，与 compare.html 逻辑同步 ---
+    const normalizedPlace = {
+      name: place.displayName?.text || place.name || '未知地点',
+      address: place.formattedAddress || '',
+      types: (place.types || []).join(', '),
+      summary: place.editorialSummary?.text || ''
+    };
+
     const type = typeLabel(place.types);
     const rating = place.rating ? `${place.rating} ★` : '';
 
@@ -551,15 +553,16 @@ function renderPlaces(places, sourceLabel) {
     card.className = 'place-card';
     card.innerHTML = `
       <div class="place-card-header">
-        <div class="place-name">${name}</div>
+        <div class="place-name">${normalizedPlace.name}</div>
         <div class="place-meta">
           <span class="place-type">${type}</span>
           ${rating ? `<span>${rating}</span>` : ''}
-          <span>${address.split(',').slice(-2).join(',').trim()}</span>
+          <span>${normalizedPlace.address.split(',').slice(-2).join(',').trim()}</span>
         </div>
       </div>`;
 
-    card.querySelector('.place-card-header').addEventListener('click', () => loadStory(place, card));
+    // 传递清洗后的 normalizedPlace
+    card.querySelector('.place-card-header').addEventListener('click', () => loadStory(normalizedPlace, card));
     list.appendChild(card);
   });
 
