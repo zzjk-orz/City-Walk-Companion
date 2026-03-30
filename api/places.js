@@ -86,7 +86,7 @@ export default async function handler(req, res) {
       ];
 
       const geminiModels = [
-        { id: 'gemini-2.0-flash-lite', label: 'Gemini 2.0 Flash-Lite' },
+        { id: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash-Lite' },
       ];
 
       // 并行调用所有模型
