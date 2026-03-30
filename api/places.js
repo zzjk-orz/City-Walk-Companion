@@ -55,30 +55,30 @@ export default async function handler(req, res) {
     }
   }
 
-  // ── Action: story（生成故事，含 Wikipedia） ──────────────────────
+  // ── Action: story ────────────────────────────────────────────────
   if (action === 'story') {
     try {
-      // 1. 查 Wikipedia
-      const wikiSummary = await fetchWikipedia(place.name);
-
-      // 2. 构建 prompt
-      const prompt = buildStoryPrompt(place, wikiSummary);
-
-      // 3. 调用 Claude（可通过 req.body.model 切换，供对比页面使用）
+      const [wikiSummary, redditPosts] = await Promise.all([
+        fetchWikipedia(place.name),
+        fetchReddit(place.name, place.address),
+      ]);
+      const prompt = buildStoryPrompt(place, wikiSummary, redditPosts);
       const model = req.body.model || 'claude-haiku-4-5-20251001';
       const story = await callClaude(model, prompt);
-
-      return res.status(200).json({ story, wikiFound: !!wikiSummary });
+      return res.status(200).json({ story, wikiFound: !!wikiSummary, redditFound: redditPosts.length > 0 });
     } catch (err) {
       return res.status(500).json({ error: err.message });
     }
   }
 
-  // ── Action: compare（多模型对比，供 compare.html 使用） ──────────
+  // ── Action: compare ───────────────────────────────────────────────
   if (action === 'compare') {
     try {
-      const wikiSummary = await fetchWikipedia(place.name);
-      const prompt = buildStoryPrompt(place, wikiSummary);
+      const [wikiSummary, redditPosts] = await Promise.all([
+        fetchWikipedia(place.name),
+        fetchReddit(place.name, place.address),
+      ]);
+      const prompt = buildStoryPrompt(place, wikiSummary, redditPosts);
 
       const claudeModels = [
         { id: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4' },
@@ -86,7 +86,7 @@ export default async function handler(req, res) {
       ];
 
       const geminiModels = [
-        { id: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash-Lite' },
+        { id: 'gemini-2.0-flash-lite', label: 'Gemini 2.0 Flash-Lite' },
       ];
 
       // 并行调用所有模型
@@ -123,33 +123,95 @@ export default async function handler(req, res) {
 // ── Wikipedia 查询（英文优先，内容更丰富；中文备用） ────────────────
 async function fetchWikipedia(name) {
   try {
-    // 1. 先用英文 Wikipedia 搜索（命中率高，内容丰富）
     const searchUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(name)}&srlimit=1&format=json&origin=*`;
     const searchRes = await fetch(searchUrl, { headers: { 'User-Agent': 'CityWalkApp/1.0' } });
     if (searchRes.ok) {
       const searchData = await searchRes.json();
       const title = searchData?.query?.search?.[0]?.title;
       if (title) {
-        const summaryUrl = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`;
-        const summaryRes = await fetch(summaryUrl, { headers: { 'User-Agent': 'CityWalkApp/1.0' } });
+        const summaryRes = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`, { headers: { 'User-Agent': 'CityWalkApp/1.0' } });
         if (summaryRes.ok) {
           const data = await summaryRes.json();
           if (data.extract && data.extract.length > 50) return data.extract;
         }
       }
     }
-
-    // 2. 英文没找到时，回退到中文 Wikipedia
-    const zhUrl = `https://zh.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(name)}`;
-    const zhRes = await fetch(zhUrl, { headers: { 'User-Agent': 'CityWalkApp/1.0' } });
+    // 英文没找到，回退中文
+    const zhRes = await fetch(`https://zh.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(name)}`, { headers: { 'User-Agent': 'CityWalkApp/1.0' } });
     if (zhRes.ok) {
       const data = await zhRes.json();
       if (data.extract && data.extract.length > 50) return data.extract;
     }
-  } catch (_) {
-    // Wikipedia 查询失败不阻断主流程
-  }
+  } catch (_) {}
   return null;
+}
+
+// ── Reddit 查询（本地人真实视角） ────────────────────────────────────
+// 使用 Reddit 公开 JSON API，无需 key，限制宽松
+async function fetchReddit(name, address) {
+  try {
+    // 从地址中提取城市名，用于缩小搜索范围
+    const city = extractCity(address);
+    const query = city ? `${name} ${city}` : name;
+
+    // 搜索 Reddit，限定相关 subreddit（本地社区、问答、旅行）
+    const searchUrl = `https://www.reddit.com/search.json?q=${encodeURIComponent(query)}&sort=relevance&limit=8&t=all&type=link`;
+    const res = await fetch(searchUrl, {
+      headers: { 'User-Agent': 'CityWalkApp/1.0 (educational project)' }
+    });
+    if (!res.ok) return [];
+
+    const data = await res.json();
+    const posts = data?.data?.children || [];
+
+    // 过滤并提取有价值的帖子
+    return posts
+      .map(p => p.data)
+      .filter(p =>
+        p.selftext && p.selftext.length > 80 &&   // 有实质内容
+        !p.over_18 &&                               // 过滤 NSFW
+        p.score > 2                                 // 有一定认可度
+      )
+      .slice(0, 4)
+      .map(p => ({
+        title: p.title,
+        text: p.selftext.slice(0, 500),  // 截断避免 token 爆炸
+        score: p.score,
+        subreddit: p.subreddit,
+      }));
+  } catch (_) {
+    return [];
+  }
+}
+
+function extractCity(address) {
+  if (!address) return '';
+  // 取地址倒数第二段（通常是城市）
+  const parts = address.split(',').map(s => s.trim());
+  return parts.length >= 2 ? parts[parts.length - 2] : '';
+}
+
+// ── Prompt 构建 ───────────────────────────────────────────────────
+function buildStoryPrompt(place, wikiSummary, redditPosts = []) {
+  const redditSection = redditPosts.length > 0
+    ? `\nReddit本地讨论：\n${redditPosts.map(p =>
+        `[r/${p.subreddit}] ${p.title}\n${p.text}`
+      ).join('\n---\n')}`
+    : '';
+
+  return `你是一个了解当地情况的向导，任务是用简洁的中文介绍这个地方。
+
+地点：${place.name}，${place.address}
+${place.summary ? `Google简介：${place.summary}` : ''}
+${wikiSummary ? `\nWikipedia：${wikiSummary}` : ''}
+${redditSection}
+
+写一段300字左右的介绍，要求：
+1. 只写有实际信息量的内容：历史事实、社会功能演变、文化名人、具体数据或年份、真实的参与方式或社会角色、本地人和社区视角
+2. 如果Reddit有相关内容，优先提炼当地人的真实评价和使用习惯，而不是官方介绍
+3. 禁止使用空洞的抒情句，例如"走在这里仿佛穿越时光"、"每一块砖都诉说着故事"这类无信息量的表达
+4. 语气自然口语化，像朋友发信息，不像导游词
+5. 直接输出正文，不加标题`;
 }
 
 // ── Gemini API 调用 ───────────────────────────────────────────────
@@ -172,25 +234,6 @@ async function callGemini(model, prompt) {
   const data = await response.json();
   return data.candidates?.[0]?.content?.parts?.[0]?.text || '暂无介绍';
 }
-function buildStoryPrompt(place, wikiSummary) {
-  return `你是一位博学的城市漫游向导，擅长讲述地方历史与文化故事。
-
-地点信息：
-- 名称：${place.name}
-- 地址：${place.address}
-- 类型：${place.types}
-${place.summary ? `- Google简介：${place.summary}` : ''}
-${wikiSummary ? `\nWikipedia资料：\n${wikiSummary}` : ''}
-
-请用优美流畅的中文，为这个地方写一段200字左右的文化历史介绍。
-要求：
-- 讲述这个地方的历史背景、建筑特色或文化意义
-- 语气像一位见多识广的朋友娓娓道来，不要太学术
-- 如果有Wikipedia资料，请融合其中的关键历史信息，但用自己的话表达
-- 适当加入有趣的细节或轶事
-- 直接输出介绍文字，不需要任何标题或前缀`;
-}
-
 // ── Claude API 调用 ───────────────────────────────────────────────
 async function callClaude(model, prompt) {
   const response = await fetch('https://api.anthropic.com/v1/messages', {
