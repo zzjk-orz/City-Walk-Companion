@@ -429,7 +429,12 @@ async function geocodePlace(query) {
 async function generateStory(place) {
   const data = await apiPost({
     action: 'story',
-    place: place // 直接传递已经清洗好的对象
+    place: {
+      name: place.displayName?.text || place.name || '未知地点',
+      address: place.formattedAddress || place.address || '',
+      types: (place.types || []).join(', '),
+      summary: place.editorialSummary?.text || place.summary || ''
+    }
   });
   return data;
 }
@@ -523,12 +528,11 @@ function typeLabel(types) {
   return '地点';
 }
 
-// 找到 index.html 中的 renderPlaces 函数，修改如下部分：
 function renderPlaces(places, sourceLabel) {
   const list = document.getElementById('placesList');
 
   if (!places.length) {
-    list.innerHTML = `<div class="error-banner">该区域800米内未找到历史文化地点...</div>`;
+    list.innerHTML = `<div class="error-banner">该区域800米内未找到历史文化地点，试试重新搜索或换个地点</div>`;
     return;
   }
 
@@ -538,14 +542,8 @@ function renderPlaces(places, sourceLabel) {
   `;
 
   places.forEach(place => {
-    // --- 新增：在这里统一清洗数据结构，与 compare.html 逻辑同步 ---
-    const normalizedPlace = {
-      name: place.displayName?.text || place.name || '未知地点',
-      address: place.formattedAddress || '',
-      types: (place.types || []).join(', '),
-      summary: place.editorialSummary?.text || ''
-    };
-
+    const name = place.displayName?.text || place.name || '未知地点';
+    const address = place.formattedAddress || '';
     const type = typeLabel(place.types);
     const rating = place.rating ? `${place.rating} ★` : '';
 
@@ -553,79 +551,62 @@ function renderPlaces(places, sourceLabel) {
     card.className = 'place-card';
     card.innerHTML = `
       <div class="place-card-header">
-        <div class="place-name">${normalizedPlace.name}</div>
+        <div class="place-name">${name}</div>
         <div class="place-meta">
           <span class="place-type">${type}</span>
           ${rating ? `<span>${rating}</span>` : ''}
-          <span>${normalizedPlace.address.split(',').slice(-2).join(',').trim()}</span>
+          <span>${address.split(',').slice(-2).join(',').trim()}</span>
         </div>
       </div>`;
 
-    // 传递清洗后的 normalizedPlace
-    card.querySelector('.place-card-header').addEventListener('click', () => loadStory(normalizedPlace, card));
+    card.querySelector('.place-card-header').addEventListener('click', () => loadStory(place, card));
     list.appendChild(card);
   });
 
-  list.innerHTML += `<a class="compare-link" href="/compare.html" target="_blank">↗ 多模型对比实验室</a>`;
+  const compareLink = document.createElement('a');
+  compareLink.className = 'compare-link';
+  compareLink.href = '/compare.html';
+  compareLink.target = '_blank';
+  compareLink.textContent = '↗ 多模型对比实验室';
+  list.appendChild(compareLink);
 }
 
 // ── 故事加载 ──────────────────────────────────────────────────────
 async function loadStory(place, card) {
-  // 1. 检查是否已经存在（点击第二次收起）
   const existing = card.querySelector('.story-area');
   if (existing) {
     existing.remove();
     card.classList.remove('active');
-    return; // 结束函数
+    return;
   }
 
-  // 2. 如果不存在，开始加载流程
-  if (activeCard) {
-    const prevStory = activeCard.querySelector('.story-area');
-    if (prevStory) prevStory.remove();
-    activeCard.classList.remove('active');
-  }
-
-  activeCard = card;
   card.classList.add('active');
-
-  // 3. 创建并插入加载状态
   const storyArea = document.createElement('div');
   storyArea.className = 'story-area';
   storyArea.innerHTML = `
-    <div style="padding:20px; text-align:center; color:var(--muted)">
-      <div class="loading-spinner" style="margin: 0 auto 10px;"></div>
-      <p style="font-size:13px;">正在召唤 AI 编织故事...</p>
-    </div>
-  `;
+    <div class="story-loading">
+      <span>正在召唤故事</span>
+      <div class="loading-dots"><span></span><span></span><span></span></div>
+    </div>`;
   card.appendChild(storyArea);
 
-  // 4. 平滑滚动
-  storyArea.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-
   try {
-    const data = await generateStory(place);
-    
-    // 5. 渲染返回的内容
-    if (!data || !data.story) throw new Error("生成失败");
-
+    const { story, wikiFound, redditFound } = await generateStory(place);
+    const paragraphs = story.split('\n').filter(p => p.trim()).map(p => `<p>${p}</p>`).join('');
+    const badges = [
+      wikiFound ? '✦ Wikipedia' : '',
+      redditFound ? '✦ Reddit 本地讨论' : '',
+    ].filter(Boolean).join('　');
     storyArea.innerHTML = `
-      <div class="story-text" style="padding:15px; line-height:1.6; font-size:14px; color:var(--ink);">
-        ${data.story.replace(/\n/g, '<br>')}
-      </div>
-      <div style="padding:0 15px 15px; display:flex; justify-content:space-between; align-items:center;">
-        <span style="font-size:11px; color:var(--gold); opacity:0.8;">
-          ${data.wikiFound ? '✦ 已校对维基百科' : ''}
-        </span>
-        <button class="tts-btn" onclick="event.stopPropagation(); speak(this.parentElement.previousElementSibling.innerText, this)" 
-                style="padding:4px 10px; font-size:12px;">
-          🔊 听介绍
-        </button>
-      </div>
-    `;
+      <div class="story-text">${paragraphs}</div>
+      ${badges ? `<span class="wiki-badge">${badges}</span>` : ''}
+      <button class="tts-btn" onclick="speak(this.dataset.text, this)"
+        data-text="${story.replace(/"/g, '&quot;')}" data-speaking="false">
+        🔊 朗读
+      </button>`;
   } catch (err) {
-    console.error(err);
-    storyArea.innerHTML = `<div style="padding:15px; font-size:12px; color:var(--muted)">加载失败，请重试</div>`;
+    storyArea.innerHTML = `<div class="story-text" style="color:var(--muted)">故事加载失败：${err.message}</div>`;
+    card.classList.remove('active');
   }
 }
 
