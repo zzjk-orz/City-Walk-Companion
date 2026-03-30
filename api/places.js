@@ -182,12 +182,12 @@ function buildStoryPrompt(place, wikiSummary) {
 ${place.summary ? `- Google简介：${place.summary}` : ''}
 ${wikiSummary ? `\nWikipedia资料：\n${wikiSummary}` : ''}
 
-请用优美流畅的中文，为这个地方写一段200字左右的文化历史介绍。
+请用优美流畅的中文，为这个地方写一段300字左右的文化历史介绍。
 要求：
 - 讲述这个地方的历史背景、建筑特色或文化意义
 // - 语气像一位见多识广的朋友娓娓道来，不要太学术
 - 如果有Wikipedia资料，请融合其中的关键历史信息，但用自己的话表达
-- 适当加入有趣的细节或轶事
+- 适当加入有趣的当地人文细节或轶事
 - 直接输出介绍文字，不需要任何标题或前缀`;
 }
 
