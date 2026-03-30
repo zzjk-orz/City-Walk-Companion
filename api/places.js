@@ -208,7 +208,7 @@ ${redditSection}
 
 写一段300字左右的介绍，要求：
 1. 只写有实际信息量的内容：历史事实、社会功能演变、文化名人、具体数据或年份、真实的参与方式或社会角色、本地人和社区视角
-2. 如果Reddit有相关内容，优先提炼当地人的真实评价和使用习惯，保留褒贬双方观点
+2. 如果Reddit有相关内容，优先提炼当地人的真实评价和使用习惯，保留褒贬双方观点，可以推荐附近周期性集会或者精品小店
 3. 禁止使用空洞的抒情句，例如"走在这里仿佛穿越时光"、"每一块砖都诉说着故事"这类无信息量的表达
 4. 语气自然亲切，像本地人给来做客的朋友讲解，但不要无意义的感叹词或者衔接气口，例如"这地方可有意思了""说到xx""有个有意思的点是"
 5. 直接输出正文，不加标题`;
@@ -222,7 +222,7 @@ async function callGemini(model, prompt) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { maxOutputTokens: 1000 }
+      generationConfig: { maxOutputTokens: 800 }
     })
   });
 
