@@ -291,6 +291,46 @@
   .tts-btn:hover { background: var(--gold); color: var(--paper); }
   .tts-btn.speaking { background: var(--accent); color: var(--paper); }
 
+  .maps-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border: 1px solid var(--aged);
+    background: transparent;
+    color: var(--muted);
+    font-family: 'Noto Sans SC', sans-serif;
+    font-size: 10px;
+    letter-spacing: 1px;
+    cursor: pointer;
+    text-decoration: none;
+    transition: all 0.2s;
+    vertical-align: middle;
+  }
+  .maps-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  .model-selector {
+    display: flex;
+    gap: 6px;
+    padding: 12px 18px 0;
+    flex-wrap: wrap;
+  }
+
+  .model-btn {
+    padding: 5px 12px;
+    border: 1px solid var(--aged);
+    background: transparent;
+    color: var(--muted);
+    font-family: 'Noto Sans SC', sans-serif;
+    font-size: 11px;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .model-btn:hover { border-color: var(--gold); color: var(--ink); }
+  .model-btn.selected { background: var(--accent); color: var(--paper); border-color: var(--accent); }
+
   .empty-state {
     text-align: center;
     padding: 60px 24px;
@@ -426,9 +466,10 @@ async function geocodePlace(query) {
   return await apiPost({ action: 'geocode', query });
 }
 
-async function generateStory(place) {
+async function generateStory(place, model = 'claude-haiku-4-5-20251001') {
   const data = await apiPost({
     action: 'story',
+    model,
     place: {
       name: place.displayName?.text || place.name || '未知地点',
       address: place.formattedAddress || place.address || '',
@@ -549,17 +590,44 @@ function renderPlaces(places, sourceLabel) {
 
     const card = document.createElement('div');
     card.className = 'place-card';
+    const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(name + ' ' + address)}`;
     card.innerHTML = `
       <div class="place-card-header">
-        <div class="place-name">${name}</div>
+        <div class="place-name">
+          ${name}
+          <a class="maps-btn" href="${mapsUrl}" target="_blank" onclick="event.stopPropagation()">地图</a>
+        </div>
         <div class="place-meta">
           <span class="place-type">${type}</span>
           ${rating ? `<span>${rating}</span>` : ''}
           <span>${address.split(',').slice(-2).join(',').trim()}</span>
         </div>
+      </div>
+      <div class="model-selector">
+        <button class="model-btn selected" data-model="claude-haiku-4-5-20251001">Haiku</button>
+        <button class="model-btn" data-model="claude-sonnet-4-20250514">Sonnet</button>
+        <button class="model-btn" data-model="gemini-2.5-flash-lite">Gemini</button>
       </div>`;
 
-    card.querySelector('.place-card-header').addEventListener('click', () => loadStory(place, card));
+    // 模型选择
+    card.querySelectorAll('.model-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        card.querySelectorAll('.model-btn').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        // 如果已有故事，切换模型后清除重新生成
+        const existing = card.querySelector('.story-area');
+        if (existing) {
+          existing.remove();
+          card.classList.remove('active');
+        }
+      });
+    });
+
+    card.querySelector('.place-card-header').addEventListener('click', () => {
+      const model = card.querySelector('.model-btn.selected')?.dataset.model || 'claude-haiku-4-5-20251001';
+      loadStory(place, card, model);
+    });
     list.appendChild(card);
   });
 
@@ -572,7 +640,7 @@ function renderPlaces(places, sourceLabel) {
 }
 
 // ── 故事加载 ──────────────────────────────────────────────────────
-async function loadStory(place, card) {
+async function loadStory(place, card, model = 'claude-haiku-4-5-20251001') {
   const existing = card.querySelector('.story-area');
   if (existing) {
     existing.remove();
@@ -591,7 +659,7 @@ async function loadStory(place, card) {
   card.appendChild(storyArea);
 
   try {
-    const { story, wikiFound, redditFound } = await generateStory(place);
+    const { story, wikiFound, redditFound } = await generateStory(place, model);
     const paragraphs = story.split('\n').filter(p => p.trim()).map(p => `<p>${p}</p>`).join('');
     const badges = [
       wikiFound ? '✦ Wikipedia' : '',
