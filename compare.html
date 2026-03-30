@@ -301,6 +301,37 @@
     border: 1px solid rgba(138, 58, 58, 0.3);
   }
 
+  /* ── TTS Button ── */
+  .tts-btn {
+    margin-top: 14px;
+    padding: 6px 14px;
+    background: transparent;
+    border: 1px solid var(--border-light);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 2px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .tts-btn:hover:not(:disabled) { border-color: var(--gold); color: var(--gold); }
+  .tts-btn:disabled { opacity: 0.4; cursor: default; }
+  .tts-btn.playing { border-color: var(--accent); color: var(--accent); }
+
+  .tts-spinner {
+    width: 10px; height: 10px;
+    border: 1px solid currentColor;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+    display: none;
+  }
+  .tts-btn.loading .tts-spinner { display: inline-block; }
+
   /* ── Wikipedia Panel ── */
   .wiki-panel {
     background: var(--surface);
@@ -624,6 +655,14 @@ async function runComparison() {
         const paragraphs = (r.text || '').split('\n').filter(p => p.trim()).map(p => `<p>${p}</p>`).join('');
         body.innerHTML = `<div class="model-text">${paragraphs}</div>`;
         charsEl.textContent = `${r.text?.length || 0} 字`;
+        // 添加朗读按钮
+        if (r.text) {
+          const ttsBtn = document.createElement('button');
+          ttsBtn.className = 'tts-btn';
+          ttsBtn.innerHTML = `<span class="tts-spinner"></span><span class="tts-label">▶ 朗读</span>`;
+          ttsBtn.onclick = () => playTTS(r.text, ttsBtn);
+          body.appendChild(ttsBtn);
+        }
       }
 
       msEl.textContent = `${r.ms}ms`;
@@ -652,6 +691,72 @@ async function runComparison() {
     runBtn.disabled = false;
     runBtn.textContent = '对比生成';
   }
+}
+
+// ── Google Cloud TTS 朗读 ────────────────────────────────────────
+let currentAudio = null;
+let currentBtn = null;
+
+async function playTTS(text, btn) {
+  // 如果正在播放同一个，点击停止
+  if (currentBtn === btn && currentAudio && !currentAudio.paused) {
+    currentAudio.pause();
+    currentAudio.currentTime = 0;
+    resetTTSBtn(btn);
+    currentAudio = null;
+    currentBtn = null;
+    return;
+  }
+
+  // 停掉其他正在播放的
+  if (currentAudio) {
+    currentAudio.pause();
+    currentAudio.currentTime = 0;
+  }
+  if (currentBtn && currentBtn !== btn) resetTTSBtn(currentBtn);
+
+  // 开始加载
+  btn.classList.add('loading');
+  btn.classList.remove('playing');
+  btn.disabled = true;
+  btn.querySelector('.tts-label').textContent = '加载中…';
+
+  try {
+    const res = await fetch('/api/tts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+
+    const audio = new Audio(`data:audio/mp3;base64,${data.audioContent}`);
+    currentAudio = audio;
+    currentBtn = btn;
+
+    btn.classList.remove('loading');
+    btn.classList.add('playing');
+    btn.disabled = false;
+    btn.querySelector('.tts-label').textContent = '⏹ 停止';
+
+    audio.play();
+    audio.onended = () => {
+      resetTTSBtn(btn);
+      currentAudio = null;
+      currentBtn = null;
+    };
+  } catch (err) {
+    btn.classList.remove('loading');
+    btn.disabled = false;
+    btn.querySelector('.tts-label').textContent = '朗读失败';
+    setTimeout(() => resetTTSBtn(btn), 2000);
+  }
+}
+
+function resetTTSBtn(btn) {
+  btn.classList.remove('loading', 'playing');
+  btn.disabled = false;
+  btn.querySelector('.tts-label').textContent = '▶ 朗读';
 }
 
 // Enter 键触发

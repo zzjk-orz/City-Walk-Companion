@@ -605,44 +605,56 @@ async function loadStory(place, card) {
   }
 }
 
-// ── TTS ───────────────────────────────────────────────────────────
-function speak(text, btn) {
-  if (currentSpeech) {
-    window.speechSynthesis.cancel();
-    currentSpeech = null;
-    document.querySelectorAll('.tts-btn').forEach(b => {
-      b.classList.remove('speaking');
-      b.textContent = '🔊 朗读';
-    });
-    if (btn.dataset.speaking === 'true') {
-      btn.dataset.speaking = 'false';
-      return;
-    }
+// ── Google Cloud TTS ─────────────────────────────────────────────
+let currentAudio = null;
+let currentBtn = null;
+
+async function speak(text, btn) {
+  // 点同一个按钮 = 停止
+  if (currentBtn === btn && currentAudio && !currentAudio.paused) {
+    currentAudio.pause();
+    currentAudio.currentTime = 0;
+    resetBtn(btn);
+    currentAudio = null; currentBtn = null;
+    return;
   }
+  // 停掉其他
+  if (currentAudio) { currentAudio.pause(); currentAudio.currentTime = 0; }
+  if (currentBtn && currentBtn !== btn) resetBtn(currentBtn);
 
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.lang = 'zh-CN';
-  utterance.rate = 0.9;
-  const voices = window.speechSynthesis.getVoices();
-  const zhVoice = voices.find(v => v.lang.startsWith('zh'));
-  if (zhVoice) utterance.voice = zhVoice;
+  btn.textContent = '⏳ 加载中';
+  btn.disabled = true;
 
-  utterance.onend = () => {
-    btn.classList.remove('speaking');
-    btn.textContent = '🔊 朗读';
-    btn.dataset.speaking = 'false';
-    currentSpeech = null;
-  };
+  try {
+    const res = await fetch('/api/tts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
 
-  currentSpeech = utterance;
-  btn.classList.add('speaking');
-  btn.textContent = '⏹ 停止';
-  btn.dataset.speaking = 'true';
-  window.speechSynthesis.speak(utterance);
+    const audio = new Audio(`data:audio/mp3;base64,${data.audioContent}`);
+    currentAudio = audio; currentBtn = btn;
+
+    btn.classList.add('speaking');
+    btn.textContent = '⏹ 停止';
+    btn.disabled = false;
+
+    audio.play();
+    audio.onended = () => { resetBtn(btn); currentAudio = null; currentBtn = null; };
+  } catch (err) {
+    btn.textContent = '加载失败';
+    setTimeout(() => resetBtn(btn), 2000);
+    btn.disabled = false;
+  }
 }
 
-window.speechSynthesis.getVoices();
-window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
+function resetBtn(btn) {
+  btn.classList.remove('speaking');
+  btn.textContent = '🔊 朗读';
+  btn.disabled = false;
+}
 </script>
 </body>
 </html>
