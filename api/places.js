@@ -64,11 +64,12 @@ export default async function handler(req, res) {
       ]);
       const prompt = buildStoryPrompt(place, wikiSummary, redditPosts);
       const model = req.body.model || 'claude-haiku-4-5-20251001';
+      const story;
       if (model.includes('gemini')) {
-        const story = await callGemini(model, prompt);
+        story = await callGemini(model, prompt);
       } else {
         // 默认走 Claude 逻辑
-        const story = await callClaude(model, prompt);
+        story = await callClaude(model, prompt);
       }
       // const story = await callClaude(model, prompt);
       return res.status(200).json({ story, wikiFound: !!wikiSummary, redditFound: redditPosts.length > 0 });
