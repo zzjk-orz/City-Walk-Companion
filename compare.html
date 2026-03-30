@@ -456,6 +456,7 @@
 </div>
 
 <script>
+const slug = id => id.replace(/[^a-zA-Z0-9]/g, '-');
 const MODELS = [
   { id: 'claude-sonnet-4-20250514',    label: 'Claude Sonnet 4',       badge: 'badge-sonnet', tier: 'smart'  },
   { id: 'claude-haiku-4-5-20251001',   label: 'Claude Haiku 4.5',      badge: 'badge-haiku',  tier: 'fast'   },
@@ -568,11 +569,11 @@ async function runComparison() {
         <span class="model-name">${m.label}</span>
         <span class="model-badge ${m.badge}">${m.tier}</span>
       </div>
-      <div class="model-meta" id="meta-${m.id}">
-        <span class="meta-item"><span class="chip-label">延迟</span><span class="meta-val" id="ms-${m.id}">—</span></span>
-        <span class="meta-item"><span class="chip-label">字数</span><span class="meta-val" id="chars-${m.id}">—</span></span>
+      <div class="model-meta" id="meta-${slug(m.id)}">
+        <span class="meta-item"><span class="chip-label">延迟</span><span class="meta-val" id="ms-${slug(m.id)}">—</span></span>
+        <span class="meta-item"><span class="chip-label">字数</span><span class="meta-val" id="chars-${slug(m.id)}">—</span></span>
       </div>
-      <div class="model-body" id="body-${m.id}">
+      <div class="model-body" id="body-${slug(m.id)}">
         <div class="model-loading">
           <div class="spinner"></div>
           <span>正在生成</span>
@@ -611,9 +612,9 @@ async function runComparison() {
     // 渲染各模型结果
     const timings = [];
     compareData.results?.forEach(r => {
-      const body = document.getElementById(`body-${r.model}`);
-      const msEl = document.getElementById(`ms-${r.model}`);
-      const charsEl = document.getElementById(`chars-${r.model}`);
+      const body = document.getElementById(`body-${slug(r.model)}`);
+      const msEl = document.getElementById(`ms-${slug(r.model)}`);
+      const charsEl = document.getElementById(`chars-${slug(r.model)}`);
 
       if (!body) return;
 

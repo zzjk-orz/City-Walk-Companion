@@ -86,7 +86,7 @@ export default async function handler(req, res) {
       ];
 
       const geminiModels = [
-        { id: 'gemini-2.0-flash-lite', label: 'Gemini 2.0 Flash-Lite' },
+        { id: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash-Lite' },
       ];
 
       // 并行调用所有模型
@@ -208,7 +208,7 @@ ${redditSection}
 
 写一段300字左右的介绍，要求：
 1. 只写有实际信息量的内容：历史事实、社会功能演变、文化名人、具体数据或年份、真实的参与方式或社会角色、本地人和社区视角
-2. 如果Reddit有相关内容，优先提炼当地人的真实评价和使用习惯，而不是官方介绍
+2. 如果Reddit有相关内容，优先提炼当地人的真实评价和使用习惯，保留褒贬双方观点
 3. 禁止使用空洞的抒情句，例如"走在这里仿佛穿越时光"、"每一块砖都诉说着故事"这类无信息量的表达
 4. 语气自然口语化，像朋友发信息，不像导游词
 5. 直接输出正文，不加标题`;
