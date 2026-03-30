@@ -563,7 +563,12 @@ function renderPlaces(places, sourceLabel) {
     list.appendChild(card);
   });
 
-  list.innerHTML += `<a class="compare-link" href="/compare.html" target="_blank">↗ 多模型对比实验室</a>`;
+  const compareLink = document.createElement('a');
+  compareLink.className = 'compare-link';
+  compareLink.href = '/compare.html';
+  compareLink.target = '_blank';
+  compareLink.textContent = '↗ 多模型对比实验室';
+  list.appendChild(compareLink);
 }
 
 // ── 故事加载 ──────────────────────────────────────────────────────
