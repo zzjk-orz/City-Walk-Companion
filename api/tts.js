@@ -8,7 +8,7 @@ export default async function handler(req, res) {
   const { text } = req.body;
   if (!text) return res.status(400).json({ error: 'Missing text' });
 
-  const VOICE_ID = '21m00Tcm4TlvDq8ikWAM'; // Rachel - Multilingual
+  const VOICE_ID = 'Ca5bKgudqKJzq8YRFoAz'; // Coco Li - A young Shanghainese female Chinese voice with a slight rasp in the voice. perfect for story narration and simple advertisement announcement： https://elevenlabs.io/app/voice-library?voiceId=Ca5bKgudqKJzq8YRFoAz
   const truncated = text.slice(0, 1500);
 
   try {
