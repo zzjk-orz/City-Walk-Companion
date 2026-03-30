@@ -571,40 +571,61 @@ function renderPlaces(places, sourceLabel) {
 
 // ── 故事加载 ──────────────────────────────────────────────────────
 async function loadStory(place, card) {
+  // 1. 检查是否已经存在（点击第二次收起）
   const existing = card.querySelector('.story-area');
   if (existing) {
     existing.remove();
     card.classList.remove('active');
-    return;
+    return; // 结束函数
   }
 
+  // 2. 如果不存在，开始加载流程
+  if (activeCard) {
+    const prevStory = activeCard.querySelector('.story-area');
+    if (prevStory) prevStory.remove();
+    activeCard.classList.remove('active');
+  }
+
+  activeCard = card;
   card.classList.add('active');
+
+  // 3. 创建并插入加载状态
   const storyArea = document.createElement('div');
   storyArea.className = 'story-area';
   storyArea.innerHTML = `
-    <div class="story-loading">
-      <span>正在召唤故事</span>
-      <div class="loading-dots"><span></span><span></span><span></span></div>
-    </div>`;
+    <div style="padding:20px; text-align:center; color:var(--muted)">
+      <div class="loading-spinner" style="margin: 0 auto 10px;"></div>
+      <p style="font-size:13px;">正在召唤 AI 编织故事...</p>
+    </div>
+  `;
   card.appendChild(storyArea);
 
+  // 4. 平滑滚动
+  storyArea.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
   try {
-    const { story, wikiFound, redditFound } = await generateStory(place);
-    const paragraphs = story.split('\n').filter(p => p.trim()).map(p => `<p>${p}</p>`).join('');
-    const badges = [
-      wikiFound ? '✦ Wikipedia' : '',
-      redditFound ? '✦ Reddit 本地讨论' : '',
-    ].filter(Boolean).join('　');
+    const data = await generateStory(place);
+    
+    // 5. 渲染返回的内容
+    if (!data || !data.story) throw new Error("生成失败");
+
     storyArea.innerHTML = `
-      <div class="story-text">${paragraphs}</div>
-      ${badges ? `<span class="wiki-badge">${badges}</span>` : ''}
-      <button class="tts-btn" onclick="speak(this.dataset.text, this)"
-        data-text="${story.replace(/"/g, '&quot;')}" data-speaking="false">
-        🔊 朗读
-      </button>`;
+      <div class="story-text" style="padding:15px; line-height:1.6; font-size:14px; color:var(--ink);">
+        ${data.story.replace(/\n/g, '<br>')}
+      </div>
+      <div style="padding:0 15px 15px; display:flex; justify-content:space-between; align-items:center;">
+        <span style="font-size:11px; color:var(--gold); opacity:0.8;">
+          ${data.wikiFound ? '✦ 已校对维基百科' : ''}
+        </span>
+        <button class="tts-btn" onclick="event.stopPropagation(); speak(this.parentElement.previousElementSibling.innerText, this)" 
+                style="padding:4px 10px; font-size:12px;">
+          🔊 听介绍
+        </button>
+      </div>
+    `;
   } catch (err) {
-    storyArea.innerHTML = `<div class="story-text" style="color:var(--muted)">故事加载失败：${err.message}</div>`;
-    card.classList.remove('active');
+    console.error(err);
+    storyArea.innerHTML = `<div style="padding:15px; font-size:12px; color:var(--muted)">加载失败，请重试</div>`;
   }
 }
 
