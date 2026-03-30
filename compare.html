@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>模型对比 · 漫游实验室</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@300;400;600&family=Noto+Sans+SC:wght@300;400&family=Playfair+Display:ital,wght@0,400;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0e0c0a;
+    --surface: #161310;
+    --border: #2a2420;
+    --border-light: #3a3028;
+    --text: #e8dfc8;
+    --muted: #7a6a55;
+    --gold: #c9a84c;
+    --gold-dim: #6b5a2a;
+    --accent: #d4824a;
+    --green: #5a8a5a;
+    --red: #8a3a3a;
+    --blue: #3a6a8a;
+    --mono: 'JetBrains Mono', monospace;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Noto Sans SC', sans-serif;
+    min-height: 100vh;
+  }
+
+  /* ── Header ── */
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 20px 32px;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .header-left { display: flex; align-items: baseline; gap: 12px; }
+
+  .lab-tag {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--gold);
+    letter-spacing: 3px;
+    border: 1px solid var(--gold-dim);
+    padding: 2px 8px;
+    text-transform: uppercase;
+  }
+
+  .page-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 22px;
+    color: var(--text);
+    font-style: italic;
+  }
+
+  .back-link {
+    font-size: 11px;
+    color: var(--muted);
+    text-decoration: none;
+    letter-spacing: 2px;
+    transition: color 0.2s;
+  }
+
+  .back-link:hover { color: var(--gold); }
+
+  /* ── Input Panel ── */
+  .input-panel {
+    padding: 24px 32px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .panel-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+  }
+
+  .place-input-row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .place-input {
+    flex: 1;
+    min-width: 200px;
+    padding: 12px 16px;
+    background: var(--surface);
+    border: 1px solid var(--border-light);
+    color: var(--text);
+    font-family: 'Noto Sans SC', sans-serif;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .place-input:focus { border-color: var(--gold); }
+  .place-input::placeholder { color: var(--muted); }
+
+  .run-btn {
+    padding: 12px 28px;
+    background: var(--gold);
+    color: var(--bg);
+    border: none;
+    font-family: 'Noto Serif SC', serif;
+    font-size: 14px;
+    letter-spacing: 3px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: opacity 0.2s;
+    white-space: nowrap;
+  }
+
+  .run-btn:disabled { opacity: 0.4; cursor: default; }
+
+  /* GPS按钮 */
+  .gps-btn {
+    padding: 12px 18px;
+    background: transparent;
+    border: 1px solid var(--border-light);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+
+  .gps-btn:hover:not(:disabled) { border-color: var(--gold); color: var(--gold); }
+  .gps-btn:disabled { opacity: 0.4; cursor: default; }
+
+  /* 地点选择器 */
+  .place-selector {
+    display: none;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .place-selector.visible { display: flex; }
+
+  .selector-label {
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 2px;
+  }
+
+  .place-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .place-chip {
+    padding: 6px 14px;
+    background: var(--surface);
+    border: 1px solid var(--border-light);
+    color: var(--text);
+    font-family: 'Noto Sans SC', sans-serif;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+    letter-spacing: 1px;
+  }
+
+  .place-chip:hover { border-color: var(--gold); color: var(--gold); }
+  .place-chip.selected { background: var(--gold); color: var(--bg); border-color: var(--gold); }
+
+  /* ── Results Grid ── */
+  .results-area {
+    padding: 24px 32px 48px;
+  }
+
+  .results-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 16px;
+    align-items: start;
+  }
+
+  /* ── Model Card ── */
+  .model-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+  }
+
+  .model-header {
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .model-name {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--gold);
+    letter-spacing: 1px;
+  }
+
+  .model-badge {
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 2px 8px;
+    border: 1px solid;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  .badge-sonnet { border-color: #5a6a8a; color: #8aaad4; }
+  .badge-haiku  { border-color: #5a8a6a; color: #8ad4aa; }
+  .badge-gemini { border-color: #8a6a3a; color: #d4aa8a; }
+
+  .model-meta {
+    padding: 10px 18px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .meta-item {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 1px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .meta-val {
+    color: var(--text);
+    font-weight: 500;
+  }
+
+  .meta-val.fast { color: var(--green); }
+  .meta-val.slow { color: var(--red); }
+
+  .model-body {
+    padding: 18px;
+    flex: 1;
+  }
+
+  .model-loading {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--muted);
+    font-size: 12px;
+    letter-spacing: 2px;
+    min-height: 120px;
+  }
+
+  .spinner {
+    width: 16px; height: 16px;
+    border: 2px solid var(--border-light);
+    border-top-color: var(--gold);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    flex-shrink: 0;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .model-text {
+    font-family: 'Noto Serif SC', serif;
+    font-size: 13.5px;
+    line-height: 2;
+    color: var(--text);
+    font-weight: 300;
+  }
+
+  .model-text p { margin-bottom: 10px; }
+  .model-text p:last-child { margin-bottom: 0; }
+
+  .model-error {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: #c06060;
+    line-height: 1.6;
+    padding: 12px;
+    background: rgba(138, 58, 58, 0.1);
+    border: 1px solid rgba(138, 58, 58, 0.3);
+  }
+
+  /* ── Wikipedia Panel ── */
+  .wiki-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    margin-bottom: 20px;
+    display: none;
+  }
+
+  .wiki-panel.visible { display: block; }
+
+  .wiki-header {
+    padding: 12px 18px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .wiki-title {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+  }
+
+  .wiki-badge {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--green);
+    border: 1px solid rgba(90, 138, 90, 0.4);
+    padding: 2px 8px;
+    letter-spacing: 1px;
+  }
+
+  .wiki-body {
+    padding: 16px 18px;
+    font-size: 12px;
+    line-height: 1.8;
+    color: var(--muted);
+    font-family: 'Noto Sans SC', sans-serif;
+    max-height: 120px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .wiki-body::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 40px;
+    background: linear-gradient(transparent, var(--surface));
+  }
+
+  /* ── Empty / Prompt State ── */
+  .empty-prompt {
+    text-align: center;
+    padding: 80px 32px;
+    color: var(--muted);
+  }
+
+  .empty-prompt-icon {
+    font-size: 40px;
+    margin-bottom: 16px;
+    opacity: 0.3;
+  }
+
+  .empty-prompt-text {
+    font-family: 'Noto Serif SC', serif;
+    font-size: 14px;
+    letter-spacing: 3px;
+    line-height: 2;
+  }
+
+  /* ── Metrics Bar ── */
+  .metrics-bar {
+    display: none;
+    padding: 14px 32px;
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 20px;
+    gap: 24px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .metrics-bar.visible { display: flex; }
+
+  .metrics-title {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 3px;
+    flex-shrink: 0;
+  }
+
+  .metric-chip {
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 4px 12px;
+    border: 1px solid var(--border-light);
+    color: var(--muted);
+    letter-spacing: 1px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .metric-chip .chip-label { color: var(--muted); }
+  .metric-chip .chip-val { color: var(--text); }
+  .metric-chip.winner { border-color: var(--gold-dim); }
+  .metric-chip.winner .chip-val { color: var(--gold); }
+
+  @media (max-width: 600px) {
+    header, .input-panel, .results-area { padding-left: 16px; padding-right: 16px; }
+    .results-grid { grid-template-columns: 1fr; }
+    .metrics-bar { padding: 12px 16px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <span class="lab-tag">实验室</span>
+    <span class="page-title">模型对比</span>
+  </div>
+  <a class="back-link" href="/">← 返回漫游</a>
+</header>
+
+<div class="input-panel">
+  <div class="panel-label">输入地点信息</div>
+
+  <div class="place-input-row">
+    <input class="place-input" id="nameInput" placeholder="地点名称，如：Pike Place Market" />
+    <input class="place-input" id="addrInput" placeholder="地址（可选），如：Seattle, WA" style="max-width:260px" />
+    <button class="gps-btn" id="gpsBtn" onclick="loadNearby()">📍 从附近获取</button>
+    <button class="run-btn" id="runBtn" onclick="runComparison()">对比生成</button>
+  </div>
+
+  <!-- 从附近加载后选择地点 -->
+  <div class="place-selector" id="placeSelector">
+    <div class="selector-label">选择一个地点进行对比：</div>
+    <div class="place-chips" id="placeChips"></div>
+  </div>
+</div>
+
+<div class="results-area" id="resultsArea">
+  <div class="empty-prompt">
+    <div class="empty-prompt-icon">⚗️</div>
+    <div class="empty-prompt-text">输入地点名称<br>同时发送给多个模型<br>并排比较结果</div>
+  </div>
+</div>
+
+<script>
+const MODELS = [
+  { id: 'claude-sonnet-4-20250514',    label: 'Claude Sonnet 4',       badge: 'badge-sonnet', tier: 'smart'  },
+  { id: 'claude-haiku-4-5-20251001',   label: 'Claude Haiku 4.5',      badge: 'badge-haiku',  tier: 'fast'   },
+  { id: 'gemini-2.0-flash-lite',       label: 'Gemini 2.0 Flash-Lite', badge: 'badge-gemini', tier: 'lite'   },
+];
+
+let selectedPlace = null;
+
+// ── 从附近加载地点列表 ──────────────────────────────────────────────
+async function loadNearby() {
+  const gpsBtn = document.getElementById('gpsBtn');
+  gpsBtn.disabled = true;
+  gpsBtn.textContent = '定位中…';
+
+  try {
+    const pos = await new Promise((resolve, reject) =>
+      navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000 })
+    );
+    const { latitude: lat, longitude: lng } = pos.coords;
+
+    gpsBtn.textContent = '加载中…';
+    const res = await fetch('/api/places', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'nearby', lat, lng })
+    });
+    const data = await res.json();
+    const places = data.places || [];
+
+    if (!places.length) {
+      gpsBtn.textContent = '附近无结果';
+      return;
+    }
+
+    renderPlaceChips(places);
+    gpsBtn.textContent = '📍 重新获取';
+  } catch (err) {
+    gpsBtn.textContent = '定位失败';
+    alert('定位失败：' + err.message);
+  } finally {
+    gpsBtn.disabled = false;
+  }
+}
+
+function renderPlaceChips(places) {
+  const selector = document.getElementById('placeSelector');
+  const chips = document.getElementById('placeChips');
+  chips.innerHTML = '';
+  selector.classList.add('visible');
+  selectedPlace = null;
+
+  places.slice(0, 6).forEach(p => {
+    const name = p.displayName?.text || p.name || '未知';
+    const addr = p.formattedAddress || '';
+    const chip = document.createElement('div');
+    chip.className = 'place-chip';
+    chip.textContent = name;
+    chip.onclick = () => {
+      document.querySelectorAll('.place-chip').forEach(c => c.classList.remove('selected'));
+      chip.classList.add('selected');
+      selectedPlace = { name, address: addr, types: (p.types || []).join(', '), summary: p.editorialSummary?.text || '' };
+      document.getElementById('nameInput').value = name;
+      document.getElementById('addrInput').value = addr;
+    };
+    chips.appendChild(chip);
+  });
+}
+
+// ── 运行对比 ────────────────────────────────────────────────────────
+async function runComparison() {
+  const name = document.getElementById('nameInput').value.trim();
+  const addr = document.getElementById('addrInput').value.trim();
+  if (!name) { alert('请输入地点名称'); return; }
+
+  const place = selectedPlace || { name, address: addr, types: '', summary: '' };
+
+  const runBtn = document.getElementById('runBtn');
+  runBtn.disabled = true;
+  runBtn.textContent = '生成中…';
+
+  const resultsArea = document.getElementById('resultsArea');
+  resultsArea.innerHTML = '';
+
+  // Wiki panel placeholder
+  const wikiPanel = document.createElement('div');
+  wikiPanel.className = 'wiki-panel';
+  wikiPanel.innerHTML = `
+    <div class="wiki-header">
+      <span class="wiki-title">Wikipedia 资料</span>
+      <span style="font-family:var(--mono);font-size:10px;color:var(--muted)">查询中…</span>
+    </div>
+    <div class="wiki-body" id="wikiBody" style="color:var(--muted)">正在查询 Wikipedia…</div>`;
+  resultsArea.appendChild(wikiPanel);
+
+  // Metrics bar
+  const metricsBar = document.createElement('div');
+  metricsBar.className = 'metrics-bar';
+  metricsBar.innerHTML = `<span class="metrics-title">性能对比</span><span style="font-family:var(--mono);font-size:11px;color:var(--muted)">等待结果…</span>`;
+  resultsArea.appendChild(metricsBar);
+
+  // Build model cards
+  const grid = document.createElement('div');
+  grid.className = 'results-grid';
+
+  const cards = MODELS.map(m => {
+    const card = document.createElement('div');
+    card.className = 'model-card';
+    card.innerHTML = `
+      <div class="model-header">
+        <span class="model-name">${m.label}</span>
+        <span class="model-badge ${m.badge}">${m.tier}</span>
+      </div>
+      <div class="model-meta" id="meta-${m.id}">
+        <span class="meta-item"><span class="chip-label">延迟</span><span class="meta-val" id="ms-${m.id}">—</span></span>
+        <span class="meta-item"><span class="chip-label">字数</span><span class="meta-val" id="chars-${m.id}">—</span></span>
+      </div>
+      <div class="model-body" id="body-${m.id}">
+        <div class="model-loading">
+          <div class="spinner"></div>
+          <span>正在生成</span>
+        </div>
+      </div>`;
+    return { card, model: m };
+  });
+
+  cards.forEach(({ card }) => grid.appendChild(card));
+  resultsArea.appendChild(grid);
+
+  // 并行调用所有模型 + compare action（含 wiki）
+  const start = Date.now();
+
+  try {
+    const compareRes = await fetch('/api/places', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'compare', place })
+    });
+    const compareData = await compareRes.json();
+
+    // 渲染 Wikipedia
+    if (compareData.wikiSummary) {
+      wikiPanel.classList.add('visible');
+      wikiPanel.querySelector('.wiki-header').innerHTML = `
+        <span class="wiki-title">Wikipedia 资料</span>
+        <span class="wiki-badge">✓ 已找到</span>`;
+      document.getElementById('wikiBody').textContent = compareData.wikiSummary;
+    } else {
+      wikiPanel.querySelector('.wiki-header').innerHTML = `
+        <span class="wiki-title">Wikipedia 资料</span>
+        <span style="font-family:var(--mono);font-size:10px;color:var(--muted)">未找到</span>`;
+    }
+
+    // 渲染各模型结果
+    const timings = [];
+    compareData.results?.forEach(r => {
+      const body = document.getElementById(`body-${r.model}`);
+      const msEl = document.getElementById(`ms-${r.model}`);
+      const charsEl = document.getElementById(`chars-${r.model}`);
+
+      if (!body) return;
+
+      if (r.error) {
+        body.innerHTML = `<div class="model-error">ERROR: ${r.error}</div>`;
+      } else {
+        const paragraphs = (r.text || '').split('\n').filter(p => p.trim()).map(p => `<p>${p}</p>`).join('');
+        body.innerHTML = `<div class="model-text">${paragraphs}</div>`;
+        charsEl.textContent = `${r.text?.length || 0} 字`;
+      }
+
+      msEl.textContent = `${r.ms}ms`;
+      msEl.className = `meta-val ${r.ms < 3000 ? 'fast' : r.ms > 8000 ? 'slow' : ''}`;
+      timings.push({ label: r.label, ms: r.ms, chars: r.text?.length || 0 });
+    });
+
+    // 渲染 metrics bar
+    if (timings.length) {
+      const fastest = timings.reduce((a, b) => a.ms < b.ms ? a : b);
+      metricsBar.classList.add('visible');
+      metricsBar.innerHTML = `
+        <span class="metrics-title">性能对比</span>
+        ${timings.map(t => `
+          <div class="metric-chip ${t.label === fastest.label ? 'winner' : ''}">
+            <span class="chip-label">${t.label}</span>
+            <span class="chip-val">${t.ms}ms · ${t.chars}字</span>
+            ${t.label === fastest.label ? '<span style="color:var(--gold);font-size:10px">最快</span>' : ''}
+          </div>`).join('')}
+        <span style="font-family:var(--mono);font-size:10px;color:var(--muted)">总耗时 ${Date.now() - start}ms</span>
+      `;
+    }
+  } catch (err) {
+    resultsArea.innerHTML = `<div style="padding:40px;font-family:var(--mono);font-size:12px;color:#c06060">ERROR: ${err.message}</div>`;
+  } finally {
+    runBtn.disabled = false;
+    runBtn.textContent = '对比生成';
+  }
+}
+
+// Enter 键触发
+document.getElementById('nameInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') runComparison();
+});
+</script>
+</body>
+</html>
