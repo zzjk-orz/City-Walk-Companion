@@ -8,26 +8,24 @@ export default async function handler(req, res) {
   const { text } = req.body;
   if (!text) return res.status(400).json({ error: 'Missing text' });
 
-  // 截断避免超出 TTS 单次限制（5000 字节）
+  const VOICE_ID = '21m00Tcm4TlvDq8ikWAM'; // Rachel - Multilingual
   const truncated = text.slice(0, 1500);
 
   try {
     const response = await fetch(
-      `https://texttospeech.googleapis.com/v1/text:synthesize?key=${process.env.GOOGLE_KEY}`,
+      `https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}`,
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'xi-api-key': process.env.ELEVENLABS_KEY,
+        },
         body: JSON.stringify({
-          input: { text: truncated },
-          voice: {
-            languageCode: 'cmn-CN',
-            name: 'cmn-CN-Wavenet-C',   // 女声；换 B 是男声
-            ssmlGender: 'FEMALE',
-          },
-          audioConfig: {
-            audioEncoding: 'MP3',
-            speakingRate: 1.0,
-            pitch: 0,
+          text: truncated,
+          model_id: 'eleven_multilingual_v2',
+          voice_settings: {
+            stability: 0.5,
+            similarity_boost: 0.75,
           },
         }),
       }
@@ -35,11 +33,13 @@ export default async function handler(req, res) {
 
     if (!response.ok) {
       const err = await response.text();
-      return res.status(500).json({ error: `Google TTS 错误: ${response.status} ${err}` });
+      return res.status(500).json({ error: `ElevenLabs 错误: ${response.status} ${err}` });
     }
 
-    const data = await response.json();
-    return res.status(200).json({ audioContent: data.audioContent }); // base64 MP3
+    // ElevenLabs 直接返回音频二进制，转成 base64 给前端
+    const arrayBuffer = await response.arrayBuffer();
+    const base64 = Buffer.from(arrayBuffer).toString('base64');
+    return res.status(200).json({ audioContent: base64 });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
