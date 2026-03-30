@@ -75,9 +75,53 @@
     50% { opacity: 0.4; }
   }
 
+  /* ── 操作区：搜索框 + 按钮 ── */
+  .controls {
+    padding: 16px 24px 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .search-row {
+    display: flex;
+    gap: 8px;
+  }
+
+  .search-input {
+    flex: 1;
+    padding: 12px 14px;
+    background: var(--card-bg);
+    border: 1px solid var(--aged);
+    color: var(--ink);
+    font-family: 'Noto Sans SC', sans-serif;
+    font-size: 14px;
+    letter-spacing: 1px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .search-input:focus { border-color: var(--gold); }
+  .search-input::placeholder { color: var(--muted); font-size: 13px; }
+
+  .search-btn {
+    padding: 12px 18px;
+    background: transparent;
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    font-family: 'Noto Serif SC', serif;
+    font-size: 13px;
+    letter-spacing: 2px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.2s;
+  }
+
+  .search-btn:hover:not(:disabled) { background: var(--accent); color: var(--paper); }
+  .search-btn:disabled { opacity: 0.5; cursor: default; }
+
   .scan-btn {
-    width: calc(100% - 48px);
-    margin: 20px 24px;
+    width: 100%;
     padding: 14px;
     background: var(--accent);
     color: var(--paper);
@@ -87,11 +131,29 @@
     letter-spacing: 4px;
     cursor: pointer;
     transition: opacity 0.2s;
+    margin-bottom: 8px;
   }
 
   .scan-btn:disabled { opacity: 0.5; cursor: default; }
 
-  .places-list { padding: 0 24px 100px; }
+  .divider-label {
+    text-align: center;
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 3px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .divider-label::before, .divider-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--aged);
+  }
+
+  .places-list { padding: 16px 24px 100px; }
 
   .section-label {
     font-size: 10px;
@@ -203,6 +265,16 @@
   .story-text p { margin-bottom: 10px; }
   .story-text p:last-child { margin-bottom: 0; }
 
+  .wiki-badge {
+    display: inline-block;
+    margin-top: 10px;
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 1px;
+    border: 1px solid var(--aged);
+    padding: 2px 8px;
+  }
+
   .tts-btn {
     margin-top: 12px;
     padding: 6px 14px;
@@ -235,7 +307,7 @@
   }
 
   .error-banner {
-    margin: 0 24px 16px;
+    margin-bottom: 16px;
     padding: 12px 16px;
     background: #fdf0ee;
     border: 1px solid #e8c8c4;
@@ -243,6 +315,31 @@
     color: #8b3a2a;
     line-height: 1.6;
   }
+
+  /* 搜索来源标签 */
+  .source-tag {
+    display: inline-block;
+    margin-bottom: 12px;
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: var(--muted);
+    border-bottom: 1px solid var(--aged);
+    padding-bottom: 4px;
+  }
+
+  .compare-link {
+    display: block;
+    text-align: center;
+    padding: 10px;
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 2px;
+    text-decoration: none;
+    border-top: 1px solid var(--aged);
+    margin-top: 20px;
+  }
+
+  .compare-link:hover { color: var(--accent); }
 
   header::after {
     content: '漫';
@@ -269,20 +366,36 @@
   </div>
 </header>
 
-<button class="scan-btn" id="scanBtn" onclick="startScan()">探索附近</button>
+<div class="controls">
+  <!-- 地点搜索 -->
+  <div class="search-row">
+    <input
+      class="search-input"
+      id="searchInput"
+      type="text"
+      placeholder="搜索地点，如「故宫」「西雅图派克市场」"
+      onkeydown="if(event.key==='Enter') searchPlace()"
+    />
+    <button class="search-btn" id="searchBtn" onclick="searchPlace()">搜索</button>
+  </div>
+
+  <div class="divider-label">或</div>
+
+  <!-- GPS 探索 -->
+  <button class="scan-btn" id="scanBtn" onclick="startScan()">探索附近</button>
+</div>
 
 <div class="places-list" id="placesList">
   <div class="empty-state">
     <div class="empty-icon">🧭</div>
-    <div class="empty-text">点击上方按钮<br>发现附近的历史与故事</div>
+    <div class="empty-text">搜索地点或点击探索附近<br>发现历史与故事</div>
   </div>
 </div>
 
 <script>
-// 前端不含任何API key，全部通过后端中转
-
 let currentSpeech = null;
 
+// ── 定位 ──────────────────────────────────────────────────────────
 async function getLocation() {
   return new Promise((resolve, reject) => {
     if (!navigator.geolocation) return reject(new Error('浏览器不支持定位'));
@@ -292,38 +405,118 @@ async function getLocation() {
   });
 }
 
-async function fetchNearbyPlaces(lat, lng) {
+// ── API 调用 ──────────────────────────────────────────────────────
+async function apiPost(body) {
   const res = await fetch('/api/places', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: 'nearby', lat, lng })
+    body: JSON.stringify(body)
   });
-  if (!res.ok) throw new Error(`服务错误: ${res.status}`);
   const data = await res.json();
-  if (data.error) throw new Error(data.error);
+  if (!res.ok || data.error) throw new Error(data.error || `服务错误: ${res.status}`);
+  return data;
+}
+
+async function fetchNearbyPlaces(lat, lng) {
+  const data = await apiPost({ action: 'nearby', lat, lng });
   return data.places;
 }
 
-async function generateStory(place) {
-  const res = await fetch('/api/places', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      action: 'story',
-      place: {
-        name: place.displayName?.text || '未知地点',
-        address: place.formattedAddress || '',
-        types: (place.types || []).join(', '),
-        summary: place.editorialSummary?.text || ''
-      }
-    })
-  });
-  if (!res.ok) throw new Error(`服务错误: ${res.status}`);
-  const data = await res.json();
-  if (data.error) throw new Error(data.error);
-  return data.story;
+async function geocodePlace(query) {
+  return await apiPost({ action: 'geocode', query });
 }
 
+async function generateStory(place) {
+  const data = await apiPost({
+    action: 'story',
+    place: {
+      name: place.displayName?.text || place.name || '未知地点',
+      address: place.formattedAddress || place.address || '',
+      types: (place.types || []).join(', '),
+      summary: place.editorialSummary?.text || place.summary || ''
+    }
+  });
+  return data;
+}
+
+// ── 搜索地点 ──────────────────────────────────────────────────────
+async function searchPlace() {
+  const input = document.getElementById('searchInput');
+  const query = input.value.trim();
+  if (!query) return;
+
+  const searchBtn = document.getElementById('searchBtn');
+  const scanBtn = document.getElementById('scanBtn');
+  const dot = document.getElementById('statusDot');
+  const statusText = document.getElementById('statusText');
+  const list = document.getElementById('placesList');
+
+  searchBtn.disabled = true;
+  searchBtn.textContent = '搜索中…';
+  scanBtn.disabled = true;
+  dot.className = 'status-dot';
+  statusText.textContent = `搜索「${query}」`;
+  list.innerHTML = '';
+
+  try {
+    // 1. 地名 → 坐标
+    const geo = await geocodePlace(query);
+    dot.className = 'status-dot active';
+    statusText.textContent = geo.name;
+
+    // 2. 坐标 → 附近景点
+    const places = await fetchNearbyPlaces(geo.lat, geo.lng);
+    renderPlaces(places, `「${geo.name}」附近`);
+  } catch (err) {
+    dot.className = 'status-dot error';
+    statusText.textContent = '搜索失败';
+    list.innerHTML = `<div class="error-banner">${err.message}</div>`;
+  } finally {
+    searchBtn.disabled = false;
+    searchBtn.textContent = '搜索';
+    scanBtn.disabled = false;
+  }
+}
+
+// ── GPS 探索 ──────────────────────────────────────────────────────
+async function startScan() {
+  const scanBtn = document.getElementById('scanBtn');
+  const searchBtn = document.getElementById('searchBtn');
+  const dot = document.getElementById('statusDot');
+  const statusText = document.getElementById('statusText');
+  const list = document.getElementById('placesList');
+
+  scanBtn.disabled = true;
+  scanBtn.textContent = '定位中…';
+  searchBtn.disabled = true;
+  dot.className = 'status-dot';
+  statusText.textContent = '获取位置中';
+  list.innerHTML = '';
+
+  try {
+    const pos = await getLocation();
+    const { latitude: lat, longitude: lng } = pos.coords;
+
+    dot.className = 'status-dot active';
+    statusText.textContent = `${lat.toFixed(4)}°N  ${Math.abs(lng).toFixed(4)}°`;
+    scanBtn.textContent = '搜索中…';
+
+    const places = await fetchNearbyPlaces(lat, lng);
+    renderPlaces(places, '当前位置附近');
+    scanBtn.textContent = '重新探索';
+  } catch (err) {
+    dot.className = 'status-dot error';
+    const msg = err.code === 1 ? '位置权限被拒绝，请在浏览器设置中允许定位' : `错误：${err.message}`;
+    statusText.textContent = '定位失败';
+    list.innerHTML = `<div class="error-banner">${msg}</div>`;
+    scanBtn.textContent = '重试';
+  } finally {
+    scanBtn.disabled = false;
+    searchBtn.disabled = false;
+  }
+}
+
+// ── 渲染地点列表 ──────────────────────────────────────────────────
 function typeLabel(types) {
   const map = {
     historical_landmark: '历史地标', museum: '博物馆', church: '教堂',
@@ -335,6 +528,80 @@ function typeLabel(types) {
   return '地点';
 }
 
+function renderPlaces(places, sourceLabel) {
+  const list = document.getElementById('placesList');
+
+  if (!places.length) {
+    list.innerHTML = `<div class="error-banner">该区域800米内未找到历史文化地点，试试重新搜索或换个地点</div>`;
+    return;
+  }
+
+  list.innerHTML = `
+    <div class="source-tag">${sourceLabel}</div>
+    <div class="section-label">发现 ${places.length} 处</div>
+  `;
+
+  places.forEach(place => {
+    const name = place.displayName?.text || place.name || '未知地点';
+    const address = place.formattedAddress || '';
+    const type = typeLabel(place.types);
+    const rating = place.rating ? `${place.rating} ★` : '';
+
+    const card = document.createElement('div');
+    card.className = 'place-card';
+    card.innerHTML = `
+      <div class="place-card-header">
+        <div class="place-name">${name}</div>
+        <div class="place-meta">
+          <span class="place-type">${type}</span>
+          ${rating ? `<span>${rating}</span>` : ''}
+          <span>${address.split(',').slice(-2).join(',').trim()}</span>
+        </div>
+      </div>`;
+
+    card.querySelector('.place-card-header').addEventListener('click', () => loadStory(place, card));
+    list.appendChild(card);
+  });
+
+  list.innerHTML += `<a class="compare-link" href="/compare.html" target="_blank">↗ 多模型对比实验室</a>`;
+}
+
+// ── 故事加载 ──────────────────────────────────────────────────────
+async function loadStory(place, card) {
+  const existing = card.querySelector('.story-area');
+  if (existing) {
+    existing.remove();
+    card.classList.remove('active');
+    return;
+  }
+
+  card.classList.add('active');
+  const storyArea = document.createElement('div');
+  storyArea.className = 'story-area';
+  storyArea.innerHTML = `
+    <div class="story-loading">
+      <span>正在召唤故事</span>
+      <div class="loading-dots"><span></span><span></span><span></span></div>
+    </div>`;
+  card.appendChild(storyArea);
+
+  try {
+    const { story, wikiFound } = await generateStory(place);
+    const paragraphs = story.split('\n').filter(p => p.trim()).map(p => `<p>${p}</p>`).join('');
+    storyArea.innerHTML = `
+      <div class="story-text">${paragraphs}</div>
+      ${wikiFound ? '<span class="wiki-badge">✦ 含 Wikipedia 资料</span>' : ''}
+      <button class="tts-btn" onclick="speak(this.dataset.text, this)"
+        data-text="${story.replace(/"/g, '&quot;')}" data-speaking="false">
+        🔊 朗读
+      </button>`;
+  } catch (err) {
+    storyArea.innerHTML = `<div class="story-text" style="color:var(--muted)">故事加载失败：${err.message}</div>`;
+    card.classList.remove('active');
+  }
+}
+
+// ── TTS ───────────────────────────────────────────────────────────
 function speak(text, btn) {
   if (currentSpeech) {
     window.speechSynthesis.cancel();
@@ -368,106 +635,6 @@ function speak(text, btn) {
   btn.textContent = '⏹ 停止';
   btn.dataset.speaking = 'true';
   window.speechSynthesis.speak(utterance);
-}
-
-async function loadStory(place, card) {
-  const existing = card.querySelector('.story-area');
-  if (existing) {
-    existing.remove();
-    card.classList.remove('active');
-    return;
-  }
-
-  card.classList.add('active');
-  const storyArea = document.createElement('div');
-  storyArea.className = 'story-area';
-  storyArea.innerHTML = `
-    <div class="story-loading">
-      <span>正在召唤故事</span>
-      <div class="loading-dots"><span></span><span></span><span></span></div>
-    </div>`;
-  card.appendChild(storyArea);
-
-  try {
-    const story = await generateStory(place);
-    const paragraphs = story.split('\n').filter(p => p.trim()).map(p => `<p>${p}</p>`).join('');
-    storyArea.innerHTML = `
-      <div class="story-text">${paragraphs}</div>
-      <button class="tts-btn" onclick="speak(this.dataset.text, this)"
-        data-text="${story.replace(/"/g, '&quot;')}" data-speaking="false">
-        🔊 朗读
-      </button>`;
-  } catch (err) {
-    storyArea.innerHTML = `<div class="story-text" style="color:var(--muted)">故事加载失败：${err.message}</div>`;
-    card.classList.remove('active');
-  }
-}
-
-function renderPlaces(places) {
-  const list = document.getElementById('placesList');
-
-  if (!places.length) {
-    list.innerHTML = `<div class="error-banner">附近800米内未找到历史文化地点，试试重新探索或换个位置</div>`;
-    return;
-  }
-
-  list.innerHTML = `<div class="section-label">附近发现 ${places.length} 处</div>`;
-
-  places.forEach(place => {
-    const name = place.displayName?.text || '未知地点';
-    const address = place.formattedAddress || '';
-    const type = typeLabel(place.types);
-    const rating = place.rating ? `${place.rating} ★` : '';
-
-    const card = document.createElement('div');
-    card.className = 'place-card';
-    card.innerHTML = `
-      <div class="place-card-header">
-        <div class="place-name">${name}</div>
-        <div class="place-meta">
-          <span class="place-type">${type}</span>
-          ${rating ? `<span>${rating}</span>` : ''}
-          <span>${address.split(',').slice(-2).join(',').trim()}</span>
-        </div>
-      </div>`;
-
-    card.querySelector('.place-card-header').addEventListener('click', () => loadStory(place, card));
-    list.appendChild(card);
-  });
-}
-
-async function startScan() {
-  const btn = document.getElementById('scanBtn');
-  const dot = document.getElementById('statusDot');
-  const statusText = document.getElementById('statusText');
-  const list = document.getElementById('placesList');
-
-  btn.disabled = true;
-  btn.textContent = '定位中…';
-  dot.className = 'status-dot';
-  statusText.textContent = '获取位置中';
-  list.innerHTML = '';
-
-  try {
-    const pos = await getLocation();
-    const { latitude: lat, longitude: lng } = pos.coords;
-
-    dot.className = 'status-dot active';
-    statusText.textContent = `${lat.toFixed(4)}°N  ${Math.abs(lng).toFixed(4)}°W`;
-    btn.textContent = '搜索中…';
-
-    const places = await fetchNearbyPlaces(lat, lng);
-    renderPlaces(places);
-    btn.textContent = '重新探索';
-  } catch (err) {
-    dot.className = 'status-dot error';
-    const msg = err.code === 1 ? '位置权限被拒绝，请在浏览器设置中允许定位' : `错误：${err.message}`;
-    statusText.textContent = '定位失败';
-    list.innerHTML = `<div class="error-banner">${msg}</div>`;
-    btn.textContent = '重试';
-  } finally {
-    btn.disabled = false;
-  }
 }
 
 window.speechSynthesis.getVoices();
