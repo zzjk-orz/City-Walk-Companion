@@ -586,11 +586,15 @@ async function loadStory(place, card) {
   card.appendChild(storyArea);
 
   try {
-    const { story, wikiFound } = await generateStory(place);
+    const { story, wikiFound, redditFound } = await generateStory(place);
     const paragraphs = story.split('\n').filter(p => p.trim()).map(p => `<p>${p}</p>`).join('');
+    const badges = [
+      wikiFound ? '✦ Wikipedia' : '',
+      redditFound ? '✦ Reddit 本地讨论' : '',
+    ].filter(Boolean).join('　');
     storyArea.innerHTML = `
       <div class="story-text">${paragraphs}</div>
-      ${wikiFound ? '<span class="wiki-badge">✦ 含 Wikipedia 资料</span>' : ''}
+      ${badges ? `<span class="wiki-badge">${badges}</span>` : ''}
       <button class="tts-btn" onclick="speak(this.dataset.text, this)"
         data-text="${story.replace(/"/g, '&quot;')}" data-speaking="false">
         🔊 朗读
