@@ -173,7 +173,7 @@ async function callGemini(model, prompt) {
   return data.candidates?.[0]?.content?.parts?.[0]?.text || '暂无介绍';
 }
 function buildStoryPrompt(place, wikiSummary) {
-  return 你是一位专业的地方志撰稿人，擅长编写客观、详实、去修辞化的建筑与历史词条。
+  return `你是一位专业的地方志撰稿人，擅长编写客观、详实、去修辞化的建筑与历史词条。
 
 地点信息：
 - 名称：${place.name}
