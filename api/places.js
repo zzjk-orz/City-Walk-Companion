@@ -162,7 +162,7 @@ async function fetchReddit(name, address) {
 };
  
     const url = `https://discoveryengine.googleapis.com/v1/projects/project-7392b454-4cad-459d-9cf/locations/global/collections/default_collection/engines/search-in-reddit_1774941942498/servingConfigs/default_search:searchLite?key=${process.env.GOOGLE_KEY}`;
-    console.log('[Reddit] fetching:', `https://discoveryengine.googleapis.com`);
+    console.log('[Reddit] fetching:',url.replace(process.env.GOOGLE_KEY, 'KEY_HIDDEN'));
  
     const res = await fetch(url, {
       method: 'POST',
