@@ -148,39 +148,31 @@ async function fetchWikipedia(name) {
   return null;
 }
 
-// ── Reddit 查询（本地人真实视角） ────────────────────────────────────
-// 使用 Reddit 公开 JSON API，无需 key，限制宽松
+// ── Reddit 查询（通过 Google Custom Search） ─────────────────────
 async function fetchReddit(name, address) {
   try {
-    // 从地址中提取城市名，用于缩小搜索范围
     const city = extractCity(address);
     const query = city ? `${name} ${city}` : name;
-
-    // 搜索 Reddit，限定相关 subreddit（本地社区、问答、旅行）
-    const searchUrl = `https://www.reddit.com/search.json?q=${encodeURIComponent(query)}&sort=relevance&limit=8&t=all&type=link`;
-    const res = await fetch(searchUrl, {
-      headers: { 'User-Agent': 'CityWalkApp/1.0 (educational project)' }
+ 
+    const params = new URLSearchParams({
+      key: process.env.GOOGLE_KEY,
+      cx: '80fc0334f3dc04db3',
+      q: query,
+      num: 5,
     });
+ 
+    const res = await fetch(`https://www.googleapis.com/customsearch/v1?${params}`);
     if (!res.ok) return [];
-
+ 
     const data = await res.json();
-    const posts = data?.data?.children || [];
-
-    // 过滤并提取有价值的帖子
-    return posts
-      .map(p => p.data)
-      .filter(p =>
-        p.selftext && p.selftext.length > 80 &&   // 有实质内容
-        !p.over_18 &&                               // 过滤 NSFW
-        p.score > 2                                 // 有一定认可度
-      )
-      .slice(0, 4)
-      .map(p => ({
-        title: p.title,
-        text: p.selftext.slice(0, 500),  // 截断避免 token 爆炸
-        score: p.score,
-        subreddit: p.subreddit,
-      }));
+    const items = data.items || [];
+ 
+    // 从 snippet 提取内容（Google CSE 返回的是摘要，不是全文）
+    return items.map(item => ({
+      title: item.title.replace(/\s*[-|].*reddit.*/i, '').trim(),
+      text: item.snippet || '',
+      subreddit: (item.link.match(/reddit\.com\/r\/([^/]+)/) || [])[1] || 'reddit',
+    })).filter(p => p.text.length > 30);
   } catch (_) {
     return [];
   }
