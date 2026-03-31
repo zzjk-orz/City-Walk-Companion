@@ -148,40 +148,72 @@ async function fetchWikipedia(name) {
   return null;
 }
 
-// ── Reddit 查询（本地人真实视角） ────────────────────────────────────
-// 使用 Reddit 公开 JSON API，无需 key，限制宽松
+// ── Reddit 查询（通过 Google Custom Search） ─────────────────────
 async function fetchReddit(name, address) {
+  console.log('[Reddit] start, name:', name, 'address:', address);
   try {
-    // 从地址中提取城市名，用于缩小搜索范围
     const city = extractCity(address);
     const query = city ? `${name} ${city}` : name;
-
-    // 搜索 Reddit，限定相关 subreddit（本地社区、问答、旅行）
-    const searchUrl = `https://www.reddit.com/search.json?q=${encodeURIComponent(query)}&sort=relevance&limit=8&t=all&type=link`;
-    const res = await fetch(searchUrl, {
-      headers: { 'User-Agent': 'CityWalkApp/1.0 (educational project)' }
+    console.log('[Reddit] query:', query);
+ 
+    const params = {
+  	"query": query, // 您的搜索关键词
+  	"pageSize": 5,         // 只返回 5 个结果
+	"servingConfig": "projects/project-7392b454-4cad-459d-9cf/locations/global/collections/default_collection/engines/search-in-reddit_1774941942498/servingConfigs/default_search",
+	
+};
+ 
+    const url = `https://discoveryengine.googleapis.com/v1/projects/project-7392b454-4cad-459d-9cf/locations/global/collections/default_collection/engines/search-in-reddit_1774941942498/servingConfigs/default_search:searchLite?key=${process.env.GOOGLE_KEY}`;
+    console.log('[Reddit] fetching:',url.replace(process.env.GOOGLE_KEY, 'KEY_HIDDEN'));
+ 
+     const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params)
     });
-    if (!res.ok) return [];
-
+    console.log('[Reddit] response status:', res.status);
+    if (!res.ok) {
+      const errText = await res.text();
+      console.log('[Reddit] error body:', errText.slice(0, 300));
+      return [];
+    }
+ 
     const data = await res.json();
-    const posts = data?.data?.children || [];
-
-    // 过滤并提取有价值的帖子
-    return posts
-      .map(p => p.data)
-      .filter(p =>
-        p.selftext && p.selftext.length > 80 &&   // 有实质内容
-        !p.over_18 &&                               // 过滤 NSFW
-        p.score > 2                                 // 有一定认可度
-      )
-      .slice(0, 4)
-      .map(p => ({
-        title: p.title,
-        text: p.selftext.slice(0, 500),  // 截断避免 token 爆炸
-        score: p.score,
-        subreddit: p.subreddit,
-      }));
-  } catch (_) {
+    // console.log('[Reddit] total results:', data.searchInformation?.totalResults);
+    console.log('[Reddit] items count:', data.results?.length ?? 0);
+    if (data.error) console.log('[Reddit] API error:', JSON.stringify(data.error));
+ 
+    // Vertex AI Search 返回格式：嵌套在 document.derivedStructData 里
+    const items = data.results || [];
+    const results = items
+      .map(item => {
+        const derived = item.document?.derivedStructData;
+        if (!derived) return null;
+        
+        const title = derived.htmlTitle
+          ? derived.htmlTitle
+              .replace(/<[^>]+>/g, '') // 移除 HTML 标签
+              .replace(/\s*[-|].*reddit.*/i, '')
+              .trim()
+          : derived.title || '';
+        
+        const snippet = derived.snippets?.[0]?.snippet || '';
+        const link = derived.link || '';
+        const subreddit = (link.match(/reddit\.com\/r\/([^/]+)/) || [])[1] || 'reddit';
+        
+        return {
+          title,
+          text: snippet,
+          subreddit,
+          link
+        };
+      })
+      .filter(p => p && p.text && p.text.length > 30);
+ 
+    console.log('[Reddit] filtered results:', results.length);
+    return results;
+  } catch (err) {
+    console.log('[Reddit] exception:', err.message);
     return [];
   }
 }
