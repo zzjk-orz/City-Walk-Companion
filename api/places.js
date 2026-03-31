@@ -166,10 +166,10 @@ async function fetchReddit(name, address) {
     const url = `https://discoveryengine.googleapis.com/v1/projects/project-7392b454-4cad-459d-9cf/locations/global/collections/default_collection/engines/search-in-reddit_1774941942498/servingConfigs/default_search:searchLite?key=${process.env.GOOGLE_KEY}`;
     console.log('[Reddit] fetching:',url.replace(process.env.GOOGLE_KEY, 'KEY_HIDDEN'));
  
-    const res = await fetch(url, {
+     const res = await fetch(url, {
       method: 'POST',
-      headers: {'Content-Type': 'application/json',},
-      body: params
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params)
     });
     console.log('[Reddit] response status:', res.status);
     if (!res.ok) {
@@ -179,16 +179,36 @@ async function fetchReddit(name, address) {
     }
  
     const data = await res.json();
-    console.log('[Reddit] total results:', data.searchInformation?.totalResults);
-    console.log('[Reddit] items count:', data.items?.length ?? 0);
+    // console.log('[Reddit] total results:', data.searchInformation?.totalResults);
+    console.log('[Reddit] items count:', data.results?.length ?? 0);
     if (data.error) console.log('[Reddit] API error:', JSON.stringify(data.error));
  
-    const items = data.items || [];
-    const results = items.map(item => ({
-      title: item.title.replace(/\s*[-|].*reddit.*/i, '').trim(),
-      text: item.snippet || '',
-      subreddit: (item.link.match(/reddit\.com\/r\/([^/]+)/) || [])[1] || 'reddit',
-    })).filter(p => p.text.length > 30);
+    // Vertex AI Search 返回格式：嵌套在 document.derivedStructData 里
+    const items = data.results || [];
+    const results = items
+      .map(item => {
+        const derived = item.document?.derivedStructData;
+        if (!derived) return null;
+        
+        const title = derived.htmlTitle
+          ? derived.htmlTitle
+              .replace(/<[^>]+>/g, '') // 移除 HTML 标签
+              .replace(/\s*[-|].*reddit.*/i, '')
+              .trim()
+          : derived.title || '';
+        
+        const snippet = derived.snippets?.[0]?.snippet || '';
+        const link = derived.link || '';
+        const subreddit = (link.match(/reddit\.com\/r\/([^/]+)/) || [])[1] || 'reddit';
+        
+        return {
+          title,
+          text: snippet,
+          subreddit,
+          link
+        };
+      })
+      .filter(p => p && p.text && p.text.length > 30);
  
     console.log('[Reddit] filtered results:', results.length);
     return results;
