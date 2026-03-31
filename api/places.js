@@ -158,7 +158,7 @@ async function fetchReddit(name, address) {
  
     const params = {
   	"query": query, // 您的搜索关键词
-  	"pageSize": 5,         // 只返回 5 个结果
+  	"pageSize": 10,         // 改成 10 以便过滤后有足够结果
 	"servingConfig": "projects/project-7392b454-4cad-459d-9cf/locations/global/collections/default_collection/engines/search-in-reddit_1774941942498/servingConfigs/default_search",
 	
 };
@@ -179,7 +179,6 @@ async function fetchReddit(name, address) {
     }
  
     const data = await res.json();
-    // console.log('[Reddit] total results:', data.searchInformation?.totalResults);
     console.log('[Reddit] items count:', data.results?.length ?? 0);
     if (data.error) console.log('[Reddit] API error:', JSON.stringify(data.error));
  
@@ -205,10 +204,25 @@ async function fetchReddit(name, address) {
           title,
           text: snippet,
           subreddit,
-          link
+          link,
+          fullText: `${title} ${snippet}` // 用于过滤判断
         };
       })
-      .filter(p => p && p.text && p.text.length > 30);
+      .filter(p => p && p.text && p.text.length > 30)
+      .map(p => {
+        // 计算相关性评分
+        p.relevanceScore = calculateRelevanceScore(p.fullText);
+        return p;
+      })
+      .filter(p => p.relevanceScore > 0) // 过滤掉黑名单命中的帖子
+      .sort((a, b) => b.relevanceScore - a.relevanceScore) // 按分数排序
+      .slice(0, 5) // 只返回前 5 个
+      .map(p => {
+        // 移除内部字段
+        delete p.fullText;
+        delete p.relevanceScore;
+        return p;
+      });
  
     console.log('[Reddit] filtered results:', results.length);
     return results;
@@ -216,6 +230,74 @@ async function fetchReddit(name, address) {
     console.log('[Reddit] exception:', err.message);
     return [];
   }
+}
+
+// ── 过滤配置 ──────────────────────────────────────────────────────
+const REDDIT_FILTERS = {
+  // 黑名单：包含这些关键词的帖子会被过滤或降低分数
+  blacklist: [
+    // 租房/出租
+    /\b(rent|lease|sublease|apartment for rent|looking for room|roommate|landlord|tenant)\b/i,
+    /\b(出租|租房|房屋出租|找室友|合租|转租)\b/,
+    
+    // 买卖交易
+    /\b(sell|selling|for sale|buy|purchase|sale price|listing)\b/i,
+    /\b(转卖|出售|二手|買|賣價)\b/,
+    
+    // 工作招聘
+    /\b(hiring|job|employment|resume|cv|position|apply now)\b/i,
+    /\b(招聘|招人|工作|职位)\b/,
+    
+    // 约会/交友
+    /\b(dating|hookup|single|relationship)\b/i,
+    /\b(约会|相亲|脱单)\b/,
+    
+    // 医疗/法律建议
+    /\b(lawsuit|medical|diagnosis|prescription|surgery)\b/i,
+    /\b(医学|法律|诉讼)\b/,
+  ],
+  
+  // 白名单：包含这些关键词的帖子加分（游客/访客相关）
+  whitelist: [
+    /\b(visit|visit guide|tourist|travel|trip|itinerary|what to do|must see|best place|recommendation|worth visiting)\b/i,
+    /\b(游客|旅游|旅行|景点|值得|推荐|必去|打卡|拍照|游览)\b/,
+    
+    // 本地文化/历史
+    /\b(history|historical|cultural|heritage|museum|architecture|landmark)\b/i,
+    /\b(历史|文化|建筑|遗迹|古迹|纪念碑)\b/,
+    
+    // 体验/评价
+    /\b(experience|visited|went to|been there|amazing|beautiful|great place|favorite)\b/i,
+    /\b(体验|去过|访问|评价|感受|印象)\b/,
+    
+    // 本地人建议
+    /\b(local|locals|native|been here|long-time|grew up|live here)\b/i,
+    /\b(本地人|当地人|本地|这里人|住在这)\b/,
+  ]
+};
+
+// ── 相关性评分函数 ────────────────────────────────────────────────
+function calculateRelevanceScore(text) {
+  let score = 10; // 基础分
+  
+  // 黑名单检查：命中直接返回 -1（完全过滤）
+  for (const pattern of REDDIT_FILTERS.blacklist) {
+    if (pattern.test(text)) {
+      console.log('[Reddit] blacklist hit:', pattern);
+      return -1;
+    }
+  }
+  
+  // 白名单检查：命中加分
+  let whitelistHits = 0;
+  for (const pattern of REDDIT_FILTERS.whitelist) {
+    if (pattern.test(text)) {
+      whitelistHits++;
+    }
+  }
+  score += whitelistHits * 5;
+  
+  return score;
 }
 
 function extractCity(address) {
