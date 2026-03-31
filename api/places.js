@@ -157,8 +157,10 @@ async function fetchReddit(name, address) {
     console.log('[Reddit] query:', query);
  
     const params = {
-  	query: query, // 您的搜索关键词
-  	pageSize: 5,         // 只返回 5 个结果
+  	"query": query, // 您的搜索关键词
+  	"pageSize": 5,         // 只返回 5 个结果
+	"servingConfig": "projects/project-7392b454-4cad-459d-9cf/locations/global/collections/default_collection/engines/search-in-reddit_1774941942498/servingConfigs/default_search",
+	
 };
  
     const url = `https://discoveryengine.googleapis.com/v1/projects/project-7392b454-4cad-459d-9cf/locations/global/collections/default_collection/engines/search-in-reddit_1774941942498/servingConfigs/default_search:searchLite?key=${process.env.GOOGLE_KEY}`;
@@ -167,7 +169,7 @@ async function fetchReddit(name, address) {
     const res = await fetch(url, {
       method: 'POST',
       headers: {'Content-Type': 'application/json',},
-      body: JSON.stringify(params)
+      body: params
     });
     console.log('[Reddit] response status:', res.status);
     if (!res.ok) {
