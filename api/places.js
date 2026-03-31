@@ -156,17 +156,19 @@ async function fetchReddit(name, address) {
     const query = city ? `${name} ${city}` : name;
     console.log('[Reddit] query:', query);
  
-    const params = new URLSearchParams({
-      key: process.env.GOOGLE_KEY,
-      cx: '80fc0334f3dc04db3',
-      q: query,
-      num: 5,
+    const params = {
+  	query: query, // 您的搜索关键词
+  	pageSize: 5,         // 只返回 5 个结果
+};
+ 
+    const url = `https://discoveryengine.googleapis.com/v1/projects/project-7392b454-4cad-459d-9cf/locations/global/collections/default_collection/engines/search-in-reddit_1774941942498/servingConfigs/default_search:searchLite?key=${process.env.GOOGLE_KEY}`;
+    console.log('[Reddit] fetching:', `https://discoveryengine.googleapis.com`);
+ 
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json',},
+      body: JSON.stringify(params)
     });
- 
-    const url = `https://www.googleapis.com/customsearch/v1?${params}`;
-    console.log('[Reddit] fetching:', url.replace(process.env.GOOGLE_KEY, 'KEY_HIDDEN'));
- 
-    const res = await fetch(url);
     console.log('[Reddit] response status:', res.status);
     if (!res.ok) {
       const errText = await res.text();
