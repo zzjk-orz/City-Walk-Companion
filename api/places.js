@@ -150,9 +150,11 @@ async function fetchWikipedia(name) {
 
 // ── Reddit 查询（通过 Google Custom Search） ─────────────────────
 async function fetchReddit(name, address) {
+  console.log('[Reddit] start, name:', name, 'address:', address);
   try {
     const city = extractCity(address);
     const query = city ? `${name} ${city}` : name;
+    console.log('[Reddit] query:', query);
  
     const params = new URLSearchParams({
       key: process.env.GOOGLE_KEY,
@@ -161,19 +163,33 @@ async function fetchReddit(name, address) {
       num: 5,
     });
  
-    const res = await fetch(`https://www.googleapis.com/customsearch/v1?${params}`);
-    if (!res.ok) return [];
+    const url = `https://www.googleapis.com/customsearch/v1?${params}`;
+    console.log('[Reddit] fetching:', url.replace(process.env.GOOGLE_KEY, 'KEY_HIDDEN'));
+ 
+    const res = await fetch(url);
+    console.log('[Reddit] response status:', res.status);
+    if (!res.ok) {
+      const errText = await res.text();
+      console.log('[Reddit] error body:', errText.slice(0, 300));
+      return [];
+    }
  
     const data = await res.json();
-    const items = data.items || [];
+    console.log('[Reddit] total results:', data.searchInformation?.totalResults);
+    console.log('[Reddit] items count:', data.items?.length ?? 0);
+    if (data.error) console.log('[Reddit] API error:', JSON.stringify(data.error));
  
-    // 从 snippet 提取内容（Google CSE 返回的是摘要，不是全文）
-    return items.map(item => ({
+    const items = data.items || [];
+    const results = items.map(item => ({
       title: item.title.replace(/\s*[-|].*reddit.*/i, '').trim(),
       text: item.snippet || '',
       subreddit: (item.link.match(/reddit\.com\/r\/([^/]+)/) || [])[1] || 'reddit',
     })).filter(p => p.text.length > 30);
-  } catch (_) {
+ 
+    console.log('[Reddit] filtered results:', results.length);
+    return results;
+  } catch (err) {
+    console.log('[Reddit] exception:', err.message);
     return [];
   }
 }
