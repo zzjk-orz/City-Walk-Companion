@@ -88,7 +88,7 @@ export default async function handler(req, res) {
       ];
 
       const geminiModels = [
-        { id: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash-Lite' },
+        { id: 'gemini-3.1-flash-lite-preview', label: 'Gemini 3.1 Flash-Lite' },
       ];
 
       // 并行调用所有模型
@@ -112,7 +112,6 @@ export default async function handler(req, res) {
           }
         }),
       ]);
-
       return res.status(200).json({ results, wikiSummary, wikiFound: !!wikiSummary });
     } catch (err) {
       return res.status(500).json({ error: err.message });
@@ -153,12 +152,35 @@ async function fetchReddit(name, address) {
   console.log('[Reddit] start, name:', name, 'address:', address);
   try {
     const city = extractCity(address);
-    const query = city ? `${name} ${city}` : name;
-    console.log('[Reddit] query:', query);
+    let query = city ? `${name} ${city}` : name;
+    
+    // 添加负向关键词，在搜索层就排除无关内容
+    const negativeKeywords = [
+      // 租房/出租
+      'rent', 'lease', 'roommate', 'sublease', 'apartment for rent',
+      'landlord', 'accommodation', 'housing',
+      
+      // 买卖交易
+      'sell', 'selling', 'for sale', 'sale price', 
+      
+      // 工作招聘
+      'hiring', 'job opening', 'employment', 
+      
+      // 约会/交友
+      'dating', 'single', 
+      
+      // 医疗建议
+      'medical', 'diagnosis', 
+    ];
+    
+    const negativeQuery = negativeKeywords.map(kw => `-"${kw}"`).join(' ');
+    query = `${query} ${negativeQuery}`;
+    
+    console.log('[Reddit] optimized query:', query);
  
     const params = {
-  	"query": query, // 您的搜索关键词
-  	"pageSize": 5,         // 只返回 5 个结果
+  	"query": query, // 包含负向关键词的搜索查询
+  	"pageSize": 8,         // 保持相对较小，因为已在搜索层过滤
 	"servingConfig": "projects/project-7392b454-4cad-459d-9cf/locations/global/collections/default_collection/engines/search-in-reddit_1774941942498/servingConfigs/default_search",
 	
 };
@@ -179,7 +201,6 @@ async function fetchReddit(name, address) {
     }
  
     const data = await res.json();
-    // console.log('[Reddit] total results:', data.searchInformation?.totalResults);
     console.log('[Reddit] items count:', data.results?.length ?? 0);
     if (data.error) console.log('[Reddit] API error:', JSON.stringify(data.error));
  
@@ -208,9 +229,10 @@ async function fetchReddit(name, address) {
           link
         };
       })
-      .filter(p => p && p.text && p.text.length > 30);
+      .filter(p => p && p.text && p.text.length > 30)
+      .slice(0, 5); // 直接返回前 5 个
  
-    console.log('[Reddit] filtered results:', results.length);
+    console.log('[Reddit] final results:', results.length);
     return results;
   } catch (err) {
     console.log('[Reddit] exception:', err.message);
