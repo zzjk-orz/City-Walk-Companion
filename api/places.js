@@ -88,7 +88,7 @@ export default async function handler(req, res) {
       ];
 
       const geminiModels = [
-        { id: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash-Lite' },
+        { id: 'gemini-3.1-flash-lite-preview', label: 'Gemini 3.1 Flash-Lite' },
       ];
 
       // 并行调用所有模型
@@ -112,7 +112,6 @@ export default async function handler(req, res) {
           }
         }),
       ]);
-
       return res.status(200).json({ results, wikiSummary, wikiFound: !!wikiSummary });
     } catch (err) {
       return res.status(500).json({ error: err.message });
@@ -159,19 +158,19 @@ async function fetchReddit(name, address) {
     const negativeKeywords = [
       // 租房/出租
       'rent', 'lease', 'roommate', 'sublease', 'apartment for rent',
-      '出租', '租房', '找室友', '合租', '转租',
+      'landlord', 'accommodation', 'housing',
       
       // 买卖交易
-      'sell', 'selling', 'for sale', 'sale price', '二手', '出售', '转卖',
+      'sell', 'selling', 'for sale', 'sale price', 
       
       // 工作招聘
-      'hiring', 'job opening', 'employment', '招聘', '招人',
+      'hiring', 'job opening', 'employment', 
       
       // 约会/交友
-      'dating', 'single', '相亲', '脱单',
+      'dating', 'single', 
       
       // 医疗建议
-      'medical', 'diagnosis', '医学',
+      'medical', 'diagnosis', 
     ];
     
     const negativeQuery = negativeKeywords.map(kw => `-"${kw}"`).join(' ');
